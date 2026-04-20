@@ -1,0 +1,12 @@
+{
+  "hosting": {
+    "public": "app/dist",
+    "ignore": ["firebase-debug.log", ".firebase"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

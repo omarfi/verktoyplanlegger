@@ -11,7 +11,7 @@ import { BottomNav } from './components/BottomNav';
 function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/verktoyplanlegger">
         <div className="app-content">
           <Routes>
             <Route path="/" element={<HomeScreen />} />

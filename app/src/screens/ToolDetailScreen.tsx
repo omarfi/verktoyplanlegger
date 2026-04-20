@@ -188,7 +188,7 @@ export function ToolDetailScreen() {
         <div className="section">
           <div className="section-title">Kjøpskandidater</div>
 
-          {sortedCandidates.map((candidate, idx) => {
+          {sortedCandidates.map((candidate) => {
             const originalIdx = tool.candidates.findIndex((c) => c.id === candidate.id);
             const isChosen = tool.chosen === originalIdx;
             const isLowest = candidate.price !== null && candidate.price === lowestPrice;
