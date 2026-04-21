@@ -72,7 +72,7 @@ export function useAuth() {
   return ctx;
 }
 
-/* ── App data context (Firestore-backed) ── */
+/* ── App data context (Firestore-backed, global shared data) ── */
 
 interface AppContextValue {
   state: AppState;
@@ -91,29 +91,16 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-function toolsCol(uid: string) {
-  return collection(db, 'users', uid, 'tools');
-}
-function kitsCol(uid: string) {
-  return collection(db, 'users', uid, 'kits');
-}
-function metaDoc(uid: string) {
-  return doc(db, 'users', uid, 'meta', 'prefs');
-}
+const toolsCol = collection(db, 'tools');
+const kitsCol = collection(db, 'kits');
+const prefsDoc = doc(db, 'meta', 'prefs');
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
   const [state, setState] = useState<AppState>({ tools: [], kits: [], preferredShops: [] });
   const [loading, setLoading] = useState(true);
 
-  // Subscribe to Firestore collections
+  // Subscribe to global Firestore collections
   useEffect(() => {
-    if (!user) {
-      setState({ tools: [], kits: [], preferredShops: [] });
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
     let toolsLoaded = false;
     let kitsLoaded = false;
     let metaLoaded = false;
@@ -121,36 +108,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (toolsLoaded && kitsLoaded && metaLoaded) setLoading(false);
     };
 
-    let isFirstToolsLoad = true;
-    const unsubTools = onSnapshot(toolsCol(user.uid), async (snap) => {
+    const unsubTools = onSnapshot(toolsCol, (snap) => {
       const tools = snap.docs.map((d) => d.data() as Tool);
-      // Auto-seed on first login with empty Firestore
-      if (isFirstToolsLoad && tools.length === 0) {
-        isFirstToolsLoad = false;
-        const seedTools = generateSeedTools();
-        const batch = writeBatch(db);
-        seedTools.forEach((t) => batch.set(doc(toolsCol(user.uid), t.id), t));
-        batch.set(metaDoc(user.uid), {
-          preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax'],
-        });
-        await batch.commit();
-        // onSnapshot will fire again with the seeded data
-        return;
-      }
-      isFirstToolsLoad = false;
       setState((s) => ({ ...s, tools }));
       toolsLoaded = true;
       checkDone();
     });
 
-    const unsubKits = onSnapshot(kitsCol(user.uid), (snap) => {
+    const unsubKits = onSnapshot(kitsCol, (snap) => {
       const kits = snap.docs.map((d) => d.data() as Kit);
       setState((s) => ({ ...s, kits }));
       kitsLoaded = true;
       checkDone();
     });
 
-    const unsubMeta = onSnapshot(metaDoc(user.uid), (snap) => {
+    const unsubMeta = onSnapshot(prefsDoc, (snap) => {
       if (snap.exists()) {
         const data = snap.data() as { preferredShops?: string[] };
         setState((s) => ({ ...s, preferredShops: data.preferredShops ?? [] }));
@@ -164,22 +136,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubKits();
       unsubMeta();
     };
-  }, [user]);
+  }, []);
 
-  const mapTool = useCallback(
-    (id: string, fn: (t: Tool) => Tool) => {
-      setState((s) => {
-        const newTools = s.tools.map((t) => {
-          if (t.id !== id) return t;
-          const updated = fn(t);
-          if (user) setDoc(doc(toolsCol(user.uid), updated.id), updated);
-          return updated;
-        });
-        return { ...s, tools: newTools };
+  const mapTool = useCallback((id: string, fn: (t: Tool) => Tool) => {
+    setState((s) => {
+      const newTools = s.tools.map((t) => {
+        if (t.id !== id) return t;
+        const updated = fn(t);
+        setDoc(doc(toolsCol, updated.id), updated);
+        return updated;
       });
-    },
-    [user],
-  );
+      return { ...s, tools: newTools };
+    });
+  }, []);
 
   const value: AppContextValue = {
     state,
@@ -211,11 +180,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addKit: (kit) => {
       const full: Kit = { ...kit, id: generateId() };
       setState((s) => ({ ...s, kits: [...s.kits, full] }));
-      if (user) setDoc(doc(kitsCol(user.uid), full.id), full);
+      setDoc(doc(kitsCol, full.id), full);
     },
     removeKit: (kitId) => {
       setState((s) => ({ ...s, kits: s.kits.filter((k) => k.id !== kitId) }));
-      if (user) deleteDoc(doc(kitsCol(user.uid), kitId));
+      deleteDoc(doc(kitsCol, kitId));
     },
     addCustomTool: (name, category, type) => {
       const tool: Tool = {
@@ -230,19 +199,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notes: '',
       };
       setState((s) => ({ ...s, tools: [...s.tools, tool] }));
-      if (user) setDoc(doc(toolsCol(user.uid), tool.id), tool);
+      setDoc(doc(toolsCol, tool.id), tool);
     },
     resetAll: async () => {
-      if (!user) return;
       const batch = writeBatch(db);
-      state.tools.forEach((t) => batch.delete(doc(toolsCol(user.uid), t.id)));
-      state.kits.forEach((k) => batch.delete(doc(kitsCol(user.uid), k.id)));
+      state.tools.forEach((t) => batch.delete(doc(toolsCol, t.id)));
+      state.kits.forEach((k) => batch.delete(doc(kitsCol, k.id)));
       await batch.commit();
 
       const seedTools = generateSeedTools();
       const batch2 = writeBatch(db);
-      seedTools.forEach((t) => batch2.set(doc(toolsCol(user.uid), t.id), t));
-      batch2.set(metaDoc(user.uid), {
+      seedTools.forEach((t) => batch2.set(doc(toolsCol, t.id), t));
+      batch2.set(prefsDoc, {
         preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax'],
       });
       await batch2.commit();
