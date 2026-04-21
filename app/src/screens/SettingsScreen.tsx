@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../store';
+import { useApp, useAuth } from '../store';
 import { ConfirmDialog } from '../components/Modal';
 
 export function SettingsScreen() {
   const { state, resetAll } = useApp();
+  const { logOut } = useAuth();
   const navigate = useNavigate();
   const [showReset, setShowReset] = useState(false);
 
@@ -75,9 +76,12 @@ export function SettingsScreen() {
         <span className="chevron">📋</span>
       </div>
 
-      <div style={{ padding: 16, marginTop: 32 }}>
+      <div style={{ padding: 16, marginTop: 32, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <button className="btn btn-danger btn-full" onClick={() => setShowReset(true)}>
           Tilbakestill alt
+        </button>
+        <button className="btn btn-full" style={{ background: 'var(--text-muted)', color: 'white' }} onClick={logOut}>
+          Logg ut
         </button>
       </div>
 

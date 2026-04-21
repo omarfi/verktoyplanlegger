@@ -1,24 +1,82 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import type { AppState, Tool, Kit, InventoryItem, ProductCandidate } from './types';
+import type { User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { auth, db, googleProvider } from './firebase';
 import { generateSeedTools } from './seedData';
 import { generateId } from './logic';
 
-const STORAGE_KEY = 'verktoyplanlegger-state';
+const ALLOWED_EMAIL = 'omar1490@gmail.com';
 
-function loadState(): AppState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return {
-    tools: generateSeedTools(),
-    kits: [],
-    preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax'],
-  };
+/* ── Auth context ── */
+
+interface AuthContextValue {
+  user: User | null;
+  loading: boolean;
+  signIn: () => Promise<void>;
+  logOut: () => Promise<void>;
+  authError: string | null;
 }
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (u && u.email !== ALLOWED_EMAIL) {
+        signOut(auth);
+        setAuthError('Kun omar1490@gmail.com har tilgang.');
+        setUser(null);
+      } else {
+        setUser(u);
+        setAuthError(null);
+      }
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const signIn = async () => {
+    setAuthError(null);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user.email !== ALLOWED_EMAIL) {
+        await signOut(auth);
+        setAuthError('Kun omar1490@gmail.com har tilgang.');
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Innlogging feilet';
+      setAuthError(msg);
+    }
+  };
+
+  const logOut = async () => {
+    await signOut(auth);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, signIn, logOut, authError }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
+  return ctx;
+}
+
+/* ── App data context (Firestore-backed) ── */
 
 interface AppContextValue {
   state: AppState;
+  loading: boolean;
   updateTool: (id: string, updates: Partial<Tool>) => void;
   addInventoryItem: (toolId: string, item: Omit<InventoryItem, 'id'>) => void;
   removeInventoryItem: (toolId: string, itemId: string) => void;
@@ -33,23 +91,99 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+function toolsCol(uid: string) {
+  return collection(db, 'users', uid, 'tools');
+}
+function kitsCol(uid: string) {
+  return collection(db, 'users', uid, 'kits');
+}
+function metaDoc(uid: string) {
+  return doc(db, 'users', uid, 'meta', 'prefs');
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(loadState);
+  const { user } = useAuth();
+  const [state, setState] = useState<AppState>({ tools: [], kits: [], preferredShops: [] });
+  const [loading, setLoading] = useState(true);
 
+  // Subscribe to Firestore collections
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+    if (!user) {
+      setState({ tools: [], kits: [], preferredShops: [] });
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    let toolsLoaded = false;
+    let kitsLoaded = false;
+    let metaLoaded = false;
+    const checkDone = () => {
+      if (toolsLoaded && kitsLoaded && metaLoaded) setLoading(false);
+    };
 
-  const updateTools = (fn: (tools: Tool[]) => Tool[]) => {
-    setState((s) => ({ ...s, tools: fn(s.tools) }));
-  };
+    let isFirstToolsLoad = true;
+    const unsubTools = onSnapshot(toolsCol(user.uid), async (snap) => {
+      const tools = snap.docs.map((d) => d.data() as Tool);
+      // Auto-seed on first login with empty Firestore
+      if (isFirstToolsLoad && tools.length === 0) {
+        isFirstToolsLoad = false;
+        const seedTools = generateSeedTools();
+        const batch = writeBatch(db);
+        seedTools.forEach((t) => batch.set(doc(toolsCol(user.uid), t.id), t));
+        batch.set(metaDoc(user.uid), {
+          preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax'],
+        });
+        await batch.commit();
+        // onSnapshot will fire again with the seeded data
+        return;
+      }
+      isFirstToolsLoad = false;
+      setState((s) => ({ ...s, tools }));
+      toolsLoaded = true;
+      checkDone();
+    });
 
-  const mapTool = (id: string, fn: (t: Tool) => Tool) => {
-    updateTools((tools) => tools.map((t) => (t.id === id ? fn(t) : t)));
-  };
+    const unsubKits = onSnapshot(kitsCol(user.uid), (snap) => {
+      const kits = snap.docs.map((d) => d.data() as Kit);
+      setState((s) => ({ ...s, kits }));
+      kitsLoaded = true;
+      checkDone();
+    });
+
+    const unsubMeta = onSnapshot(metaDoc(user.uid), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as { preferredShops?: string[] };
+        setState((s) => ({ ...s, preferredShops: data.preferredShops ?? [] }));
+      }
+      metaLoaded = true;
+      checkDone();
+    });
+
+    return () => {
+      unsubTools();
+      unsubKits();
+      unsubMeta();
+    };
+  }, [user]);
+
+  const mapTool = useCallback(
+    (id: string, fn: (t: Tool) => Tool) => {
+      setState((s) => {
+        const newTools = s.tools.map((t) => {
+          if (t.id !== id) return t;
+          const updated = fn(t);
+          if (user) setDoc(doc(toolsCol(user.uid), updated.id), updated);
+          return updated;
+        });
+        return { ...s, tools: newTools };
+      });
+    },
+    [user],
+  );
 
   const value: AppContextValue = {
     state,
+    loading,
     updateTool: (id, updates) => mapTool(id, (t) => ({ ...t, ...updates })),
     addInventoryItem: (toolId, item) =>
       mapTool(toolId, (t) => ({
@@ -70,35 +204,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       mapTool(toolId, (t) => ({
         ...t,
         candidates: t.candidates.filter((c) => c.id !== candidateId),
-        chosen: t.chosen !== null && t.candidates[t.chosen]?.id === candidateId ? null : t.chosen,
+        chosen:
+          t.chosen !== null && t.candidates[t.chosen]?.id === candidateId ? null : t.chosen,
       })),
     chooseCandidate: (toolId, index) => mapTool(toolId, (t) => ({ ...t, chosen: index })),
-    addKit: (kit) =>
-      setState((s) => ({ ...s, kits: [...s.kits, { ...kit, id: generateId() }] })),
-    removeKit: (kitId) =>
-      setState((s) => ({ ...s, kits: s.kits.filter((k) => k.id !== kitId) })),
-    addCustomTool: (name, category, type) =>
-      updateTools((tools) => [
-        ...tools,
-        {
-          id: generateId(),
-          name,
-          category,
-          type,
-          inventoryDone: false,
-          inventory: [],
-          candidates: [],
-          chosen: null,
-          notes: '',
-        },
-      ]),
-    resetAll: () => {
-      const fresh: AppState = {
-        tools: generateSeedTools(),
-        kits: [],
-        preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax'],
+    addKit: (kit) => {
+      const full: Kit = { ...kit, id: generateId() };
+      setState((s) => ({ ...s, kits: [...s.kits, full] }));
+      if (user) setDoc(doc(kitsCol(user.uid), full.id), full);
+    },
+    removeKit: (kitId) => {
+      setState((s) => ({ ...s, kits: s.kits.filter((k) => k.id !== kitId) }));
+      if (user) deleteDoc(doc(kitsCol(user.uid), kitId));
+    },
+    addCustomTool: (name, category, type) => {
+      const tool: Tool = {
+        id: generateId(),
+        name,
+        category,
+        type,
+        inventoryDone: false,
+        inventory: [],
+        candidates: [],
+        chosen: null,
+        notes: '',
       };
-      setState(fresh);
+      setState((s) => ({ ...s, tools: [...s.tools, tool] }));
+      if (user) setDoc(doc(toolsCol(user.uid), tool.id), tool);
+    },
+    resetAll: async () => {
+      if (!user) return;
+      const batch = writeBatch(db);
+      state.tools.forEach((t) => batch.delete(doc(toolsCol(user.uid), t.id)));
+      state.kits.forEach((k) => batch.delete(doc(kitsCol(user.uid), k.id)));
+      await batch.commit();
+
+      const seedTools = generateSeedTools();
+      const batch2 = writeBatch(db);
+      seedTools.forEach((t) => batch2.set(doc(toolsCol(user.uid), t.id), t));
+      batch2.set(metaDoc(user.uid), {
+        preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax'],
+      });
+      await batch2.commit();
     },
   };
 
