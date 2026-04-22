@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
 import { getStatus, calculateGaps, locationLabel, locationClass } from '../logic';
@@ -13,6 +13,8 @@ export function ToolDetailScreen() {
     state, updateTool, removeInventoryItem, updateInventoryItem,
     chooseCandidate, removeCandidate, updateCandidate,
   } = useApp();
+  const [showCandidates, setShowCandidates] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
 
   const tool = state.tools.find((t) => t.id === id);
   if (!tool) return <div className="section">Verktøy ikke funnet</div>;
@@ -22,8 +24,12 @@ export function ToolDetailScreen() {
 
   const sortedCandidates = [...tool.candidates].sort((a, b) => a.price - b.price);
   const lowestPrice = sortedCandidates.length > 0 ? sortedCandidates[0].price : null;
-  const [showCandidates, setShowCandidates] = useState(tool.candidates.length > 0);
-  const [showNotes, setShowNotes] = useState(false);
+
+  useEffect(() => {
+    if (tool.candidates.length > 0) {
+      setShowCandidates(true);
+    }
+  }, [tool.candidates.length]);
 
   const getShopClass = (shop: string) => {
     const lower = shop.toLowerCase();
