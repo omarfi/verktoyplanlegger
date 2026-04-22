@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, AppProvider, useAuth } from './store';
 import { HomeScreen } from './screens/HomeScreen';
 import { ToolDetailScreen } from './screens/ToolDetailScreen';
@@ -39,7 +39,7 @@ function AuthGate() {
 
   return (
     <AppProvider>
-      <BrowserRouter basename="/verktoyplanlegger">
+      <HashRouter>
         <div className="app-content">
           <Routes>
             <Route path="/" element={<HomeScreen />} />
@@ -51,7 +51,7 @@ function AuthGate() {
           </Routes>
         </div>
         <BottomNav />
-      </BrowserRouter>
+      </HashRouter>
     </AppProvider>
   );
 }
