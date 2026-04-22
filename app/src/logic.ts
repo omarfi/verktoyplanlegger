@@ -79,7 +79,24 @@ export function detectShop(url: string): string | null {
   if (lower.includes('biltema.no')) return 'Biltema';
   if (lower.includes('clasohlson.no') || lower.includes('clas-ohlson.no')) return 'Clas Ohlson';
   if (lower.includes('byggmax.no')) return 'Byggmax';
+  if (lower.includes('obs.no') || lower.includes('obsbygg.no')) return 'Obs Bygg';
   return null;
+}
+
+export function locationLabel(loc: string): string {
+  switch (loc) {
+    case 'mine': return 'Raschs Vei';
+    case 'parents': return 'Østerliveien';
+    default: return 'Ukjent';
+  }
+}
+
+export function locationClass(loc: string): string {
+  switch (loc) {
+    case 'mine': return 'location-mine';
+    case 'parents': return 'location-parents';
+    default: return 'location-unknown';
+  }
 }
 
 export function generateId(): string {

@@ -23,9 +23,7 @@ export function DashboardScreen() {
     for (const t of toolsWithStatus) {
       if (t.chosen !== null && t.candidates[t.chosen]) {
         const c = t.candidates[t.chosen];
-        if (c.price !== null) {
-          shoppingList.push({ name: t.name, shop: c.shop, price: c.price, toolId: t.id });
-        }
+        shoppingList.push({ name: t.name, shop: c.shop, price: c.price, toolId: t.id });
       }
     }
 
@@ -50,17 +48,16 @@ export function DashboardScreen() {
 
     // Kit suggestions
     const kitSuggestions: { kit: typeof state.kits[0]; covers: string[]; individualCost: number; saving: number }[] = [];
-    const shoppingToolNames = new Set(shoppingList.map((s) => s.name));
-    const gapToolNames = new Set(unresolvedGaps.map((g) => g.name));
-    const allNeeded = new Set([...shoppingToolNames, ...gapToolNames]);
+    const shoppingToolIds = new Set(shoppingList.map((s) => s.toolId));
+    const gapToolIds = new Set(unresolvedGaps.map((g) => g.toolId));
+    const allNeededIds = new Set([...shoppingToolIds, ...gapToolIds]);
 
     for (const kit of state.kits) {
-      const covered = kit.contents.filter((c) => allNeeded.has(c));
+      const covered = kit.contents.filter((id) => allNeededIds.has(id));
       if (covered.length >= 2) {
-        // Calculate individual cost of those items
         let indCost = 0;
-        for (const name of covered) {
-          const item = shoppingList.find((s) => s.name === name);
+        for (const id of covered) {
+          const item = shoppingList.find((s) => s.toolId === id);
           if (item) indCost += item.price;
         }
         const saving = indCost - kit.price;
@@ -140,7 +137,7 @@ export function DashboardScreen() {
           {analysis.moveList.map((item) => (
             <div key={item.toolId} className="move-row" onClick={() => navigate(`/tool/${item.toolId}`)}>
               <span>{item.name}</span>
-              <span className="move-direction">Foreldre → Deg</span>
+              <span className="move-direction">Østerliveien → Raschs Vei</span>
             </div>
           ))}
         </>

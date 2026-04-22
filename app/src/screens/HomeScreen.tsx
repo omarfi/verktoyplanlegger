@@ -1,12 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
-import { getStatus } from '../logic';
+import { getStatus, locationLabel } from '../logic';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
 import type { FilterStatus } from '../types';
 import { getCategoryOrder } from '../seedData';
-import { classifyTool } from '../ai';
 
 const FILTER_OPTIONS: { key: FilterStatus; label: string }[] = [
   { key: 'all', label: 'Alle' },
@@ -24,6 +23,15 @@ export function HomeScreen() {
   const [showAddTool, setShowAddTool] = useState(false);
   const [newToolName, setNewToolName] = useState('');
   const [newToolCategory, setNewToolCategory] = useState('');
+  const [newCustomCategory, setNewCustomCategory] = useState('');
+
+  // All categories: seed + any custom ones from Firestore
+  const allCategories = useMemo(() => {
+    const seedCats = getCategoryOrder();
+    const allCats = new Set(seedCats);
+    for (const t of state.tools) allCats.add(t.category);
+    return [...allCats];
+  }, [state.tools]);
 
   const toolsWithStatus = useMemo(
     () => state.tools.map((t) => ({ ...t, status: getStatus(t) })),
@@ -38,7 +46,6 @@ export function HomeScreen() {
 
   const filtered = useMemo(() => {
     if (filter === 'all') return toolsWithStatus;
-    // "done" filter also includes "move" status tools that are done
     return toolsWithStatus.filter((t) => t.status === filter);
   }, [toolsWithStatus, filter]);
 
@@ -49,12 +56,10 @@ export function HomeScreen() {
       if (!map.has(t.category)) map.set(t.category, []);
       map.get(t.category)!.push(t);
     }
-    // Sort by category order
     const result: [string, typeof filtered][] = [];
     for (const cat of categoryOrder) {
       if (map.has(cat)) result.push([cat, map.get(cat)!]);
     }
-    // Add any custom categories not in seed
     for (const [cat, tools] of map) {
       if (!categoryOrder.includes(cat)) result.push([cat, tools]);
     }
@@ -69,13 +74,16 @@ export function HomeScreen() {
     setCollapsed((c) => ({ ...c, [cat]: !c[cat] }));
   };
 
-  const handleAddTool = async () => {
+  const handleAddTool = () => {
     if (!newToolName.trim()) return;
-    const category = newToolCategory.trim() || 'Annet';
-    const type = await classifyTool(newToolName);
-    addCustomTool(newToolName.trim(), category, type);
+    const category = newToolCategory === '__new__'
+      ? newCustomCategory.trim()
+      : newToolCategory;
+    if (!category) return;
+    addCustomTool(newToolName.trim(), category, 'basic');
     setNewToolName('');
     setNewToolCategory('');
+    setNewCustomCategory('');
     setShowAddTool(false);
   };
 
@@ -85,12 +93,19 @@ export function HomeScreen() {
     return `${done}/${catTools.length}`;
   };
 
+  // Compute location summary for a tool
+  const getLocationSummary = (tool: typeof toolsWithStatus[0]) => {
+    if (tool.inventory.length === 0) return null;
+    const locations = [...new Set(tool.inventory.map((i) => i.location))];
+    return locations.map(locationLabel).join(' + ');
+  };
+
   return (
     <>
       <div className="header">
         <div className="header-row">
           <div className="header-title">Verktøyplanlegger</div>
-          <button className="gear-btn" onClick={() => navigate('/settings')}>⚙</button>
+          <button className="gear-btn" onClick={() => navigate('/settings')}>&#9881;</button>
         </div>
         <div className="header-subtitle">{doneCount} av {totalCount} ferdig</div>
         <div className="progress-bar-container">
@@ -115,7 +130,7 @@ export function HomeScreen() {
         <div key={category} className="category-group">
           <div className="category-header" onClick={() => toggleCategory(category)}>
             <div className="category-header-left">
-              <span className={`category-chevron ${!collapsed[category] ? 'open' : ''}`}>▶</span>
+              <span className={`category-chevron ${!collapsed[category] ? 'open' : ''}`}>&#9654;</span>
               <span className="category-name">{category}</span>
               <span className="category-count">{getCategoryDoneCount(category)}</span>
             </div>
@@ -126,6 +141,7 @@ export function HomeScreen() {
                 const image = tool.inventory.find((i) => i.image)?.image
                   || tool.candidates.find((c) => c.image)?.image
                   || null;
+                const locSummary = getLocationSummary(tool);
 
                 return (
                   <div key={tool.id} className="tool-card" onClick={() => navigate(`/tool/${tool.id}`)}>
@@ -133,7 +149,7 @@ export function HomeScreen() {
                       {image ? (
                         <img src={image} alt={tool.name} />
                       ) : (
-                        <div className="tool-card-placeholder">🔧</div>
+                        <div className="tool-card-placeholder">&#128295;</div>
                       )}
                       <div className="tool-card-badge">
                         <StatusBadge status={tool.status} />
@@ -142,8 +158,8 @@ export function HomeScreen() {
                     <div className="tool-card-info">
                       <div className="tool-card-name">{tool.name}</div>
                       <div className="tool-card-meta">
-                        {tool.type === 'basic' ? 'Grunnleggende' : 'Avansert'}
-                        {tool.inventory.length > 0 && ` · ${tool.inventory.length} stk`}
+                        {locSummary || 'Ingen registrert'}
+                        {tool.inventory.length > 0 && ` \u00b7 ${tool.inventory.length} stk`}
                       </div>
                     </div>
                   </div>
@@ -156,16 +172,16 @@ export function HomeScreen() {
 
       {grouped.length === 0 && (
         <div className="empty-state">
-          <div className="empty-state-icon">🔧</div>
+          <div className="empty-state-icon">&#128295;</div>
           <div className="empty-state-text">Ingen verktøy matcher filteret</div>
         </div>
       )}
 
       <button className="add-tool-fab" onClick={() => setShowAddTool(true)}>+</button>
 
-      <Modal open={showAddTool} onClose={() => setShowAddTool(false)} title="Legg til verktøy">
+      <Modal open={showAddTool} onClose={() => { setShowAddTool(false); setNewToolCategory(''); setNewCustomCategory(''); }} title="Legg til verktøy">
         <div className="form-group">
-          <label className="form-label">Navn</label>
+          <label className="form-label">Navn *</label>
           <input
             className="form-input"
             value={newToolName}
@@ -174,15 +190,35 @@ export function HomeScreen() {
           />
         </div>
         <div className="form-group">
-          <label className="form-label">Kategori (valgfritt)</label>
-          <input
+          <label className="form-label">Kategori *</label>
+          <select
             className="form-input"
             value={newToolCategory}
             onChange={(e) => setNewToolCategory(e.target.value)}
-            placeholder="F.eks. Elektroverktøy"
-          />
+          >
+            <option value="">Velg kategori...</option>
+            {allCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+            <option value="__new__">+ Ny kategori</option>
+          </select>
         </div>
-        <button className="btn btn-primary btn-full" onClick={handleAddTool}>
+        {newToolCategory === '__new__' && (
+          <div className="form-group">
+            <label className="form-label">Ny kategori *</label>
+            <input
+              className="form-input"
+              value={newCustomCategory}
+              onChange={(e) => setNewCustomCategory(e.target.value)}
+              placeholder="F.eks. Elektroverktøy"
+            />
+          </div>
+        )}
+        <button
+          className="btn btn-primary btn-full"
+          onClick={handleAddTool}
+          disabled={!newToolName.trim() || (!newToolCategory || (newToolCategory === '__new__' && !newCustomCategory.trim()))}
+        >
           Legg til
         </button>
       </Modal>

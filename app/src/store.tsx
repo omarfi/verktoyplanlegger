@@ -79,13 +79,17 @@ interface AppContextValue {
   loading: boolean;
   updateTool: (id: string, updates: Partial<Tool>) => void;
   addInventoryItem: (toolId: string, item: Omit<InventoryItem, 'id'>) => void;
+  updateInventoryItem: (toolId: string, itemId: string, updates: Partial<InventoryItem>) => void;
   removeInventoryItem: (toolId: string, itemId: string) => void;
   addCandidate: (toolId: string, candidate: Omit<ProductCandidate, 'id'>) => void;
+  updateCandidate: (toolId: string, candidateId: string, updates: Partial<ProductCandidate>) => void;
   removeCandidate: (toolId: string, candidateId: string) => void;
   chooseCandidate: (toolId: string, index: number | null) => void;
   addKit: (kit: Omit<Kit, 'id'>) => void;
+  updateKit: (kitId: string, updates: Partial<Kit>) => void;
   removeKit: (kitId: string) => void;
   addCustomTool: (name: string, category: string, type: 'basic' | 'advanced') => void;
+  addShop: (shop: string) => void;
   resetAll: () => void;
 }
 
@@ -99,7 +103,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({ tools: [], kits: [], preferredShops: [] });
   const [loading, setLoading] = useState(true);
 
-  // Subscribe to global Firestore collections
   useEffect(() => {
     let toolsLoaded = false;
     let kitsLoaded = false;
@@ -159,6 +162,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...t,
         inventory: [...t.inventory, { ...item, id: generateId() }],
       })),
+    updateInventoryItem: (toolId, itemId, updates) =>
+      mapTool(toolId, (t) => ({
+        ...t,
+        inventory: t.inventory.map((i) => (i.id === itemId ? { ...i, ...updates } : i)),
+      })),
     removeInventoryItem: (toolId, itemId) =>
       mapTool(toolId, (t) => ({
         ...t,
@@ -168,6 +176,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       mapTool(toolId, (t) => ({
         ...t,
         candidates: [...t.candidates, { ...candidate, id: generateId() }],
+      })),
+    updateCandidate: (toolId, candidateId, updates) =>
+      mapTool(toolId, (t) => ({
+        ...t,
+        candidates: t.candidates.map((c) => (c.id === candidateId ? { ...c, ...updates } : c)),
       })),
     removeCandidate: (toolId, candidateId) =>
       mapTool(toolId, (t) => ({
@@ -181,6 +194,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const full: Kit = { ...kit, id: generateId() };
       setState((s) => ({ ...s, kits: [...s.kits, full] }));
       setDoc(doc(kitsCol, full.id), full);
+    },
+    updateKit: (kitId, updates) => {
+      setState((s) => ({
+        ...s,
+        kits: s.kits.map((k) => {
+          if (k.id !== kitId) return k;
+          const updated = { ...k, ...updates };
+          setDoc(doc(kitsCol, updated.id), updated);
+          return updated;
+        }),
+      }));
     },
     removeKit: (kitId) => {
       setState((s) => ({ ...s, kits: s.kits.filter((k) => k.id !== kitId) }));
@@ -201,6 +225,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, tools: [...s.tools, tool] }));
       setDoc(doc(toolsCol, tool.id), tool);
     },
+    addShop: (shop: string) => {
+      setState((s) => {
+        const shops = [...s.preferredShops, shop];
+        setDoc(prefsDoc, { preferredShops: shops });
+        return { ...s, preferredShops: shops };
+      });
+    },
     resetAll: async () => {
       const batch = writeBatch(db);
       state.tools.forEach((t) => batch.delete(doc(toolsCol, t.id)));
@@ -211,7 +242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const batch2 = writeBatch(db);
       seedTools.forEach((t) => batch2.set(doc(toolsCol, t.id), t));
       batch2.set(prefsDoc, {
-        preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax'],
+        preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax', 'Obs Bygg'],
       });
       await batch2.commit();
     },

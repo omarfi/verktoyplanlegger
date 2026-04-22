@@ -153,7 +153,7 @@ body {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  background: var(--bg);
+  background: #ffffff;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -349,6 +349,7 @@ body {
 .shop-biltema { background: #0066b3; }
 .shop-clas { background: #00a651; }
 .shop-byggmax { background: #f7a600; }
+.shop-obs { background: #e6007e; }
 
 .candidate-price { font-size: 16px; font-weight: 700; white-space: nowrap; }
 .candidate-price-diff { font-size: 12px; color: var(--text-muted); }
@@ -578,3 +579,29 @@ body {
 }
 .login-card p { color: var(--text-muted); margin-bottom: 24px; font-size: 14px; }
 .login-error { color: #dc2626; margin-top: 16px; font-size: 13px; }
+
+/* Dropdown list (tool search in kit) */
+.dropdown-list {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--card); max-height: 200px; overflow-y: auto; margin-top: 4px;
+}
+.dropdown-item {
+  padding: 10px 12px; cursor: pointer; font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.dropdown-item:last-child { border-bottom: none; }
+.dropdown-item:hover { background: var(--bg); }
+
+/* Icon buttons (edit/delete/move on rows) */
+.btn-icon {
+  background: none; border: none; cursor: pointer; font-size: 14px;
+  padding: 2px 6px; color: var(--text-muted); border-radius: 4px;
+  transition: all 0.15s;
+}
+.btn-icon:hover { background: var(--bg); }
+.btn-icon.delete:hover { color: #ef4444; }
+
+/* Form select styling */
+select.form-input {
+  appearance: auto;
+}

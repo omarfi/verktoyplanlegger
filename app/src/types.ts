@@ -2,7 +2,7 @@ export interface InventoryItem {
   id: string;
   location: 'mine' | 'parents' | 'unknown';
   name: string;
-  image: string | null;
+  image: string;
   url: string | null;
   shop: string | null;
   price: number | null;
@@ -11,10 +11,10 @@ export interface InventoryItem {
 export interface ProductCandidate {
   id: string;
   name: string;
-  image: string | null;
-  url: string | null;
+  image: string;
+  productUrl: string;
   shop: string;
-  price: number | null;
+  price: number;
   articleNumber: string | null;
 }
 
@@ -33,11 +33,11 @@ export interface Tool {
 export interface Kit {
   id: string;
   name: string;
-  url: string;
-  image: string | null;
+  productUrl: string;
+  image: string;
   shop: string;
   price: number;
-  contents: string[];
+  contents: string[]; // tool IDs
 }
 
 export interface AppState {
