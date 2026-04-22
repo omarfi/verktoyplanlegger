@@ -79,7 +79,7 @@ export function detectShop(url: string): string | null {
   if (lower.includes('biltema.no')) return 'Biltema';
   if (lower.includes('clasohlson.no') || lower.includes('clas-ohlson.no')) return 'Clas Ohlson';
   if (lower.includes('byggmax.no')) return 'Byggmax';
-  if (lower.includes('obs.no') || lower.includes('obsbygg.no')) return 'Obs Bygg';
+  if (lower.includes('obsbygg.no') || lower.includes('obs.no')) return 'Obs Bygg';
   return null;
 }
 

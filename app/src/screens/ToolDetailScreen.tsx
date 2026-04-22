@@ -193,7 +193,7 @@ export function ToolDetailScreen() {
                 onToggleChosen={() => chooseCandidate(tool.id, isChosen ? null : originalIdx)}
                 onRemove={() => removeCandidate(tool.id, candidate.id)}
                 onUpdate={(updates) => updateCandidate(tool.id, candidate.id, updates)}
-                shops={state.preferredShops}
+                shops={state.preferredShops.map((s) => s.name)}
               />
             );
           })}

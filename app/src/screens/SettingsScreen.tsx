@@ -4,11 +4,15 @@ import { useApp, useAuth } from '../store';
 import { ConfirmDialog } from '../components/Modal';
 
 export function SettingsScreen() {
-  const { state, resetAll, addShop } = useApp();
+  const { state, resetAll, addShop, updateShop, removeShop } = useApp();
   const { logOut } = useAuth();
   const navigate = useNavigate();
   const [showReset, setShowReset] = useState(false);
   const [newShop, setNewShop] = useState('');
+  const [newShopUrl, setNewShopUrl] = useState('https://');
+  const [editingShopId, setEditingShopId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editUrl, setEditUrl] = useState('');
 
   const handleExportJson = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -54,9 +58,22 @@ export function SettingsScreen() {
   };
 
   const handleAddShop = () => {
-    if (!newShop.trim()) return;
-    addShop(newShop.trim());
+    if (!newShop.trim() || !newShopUrl.trim()) return;
+    addShop({ name: newShop.trim(), url: newShopUrl.trim() });
     setNewShop('');
+    setNewShopUrl('https://');
+  };
+
+  const startEditShop = (id: string, name: string, url: string) => {
+    setEditingShopId(id);
+    setEditName(name);
+    setEditUrl(url);
+  };
+
+  const saveEditShop = () => {
+    if (!editingShopId || !editName.trim() || !editUrl.trim()) return;
+    updateShop(editingShopId, { name: editName.trim(), url: editUrl.trim() });
+    setEditingShopId(null);
   };
 
   return (
@@ -84,21 +101,48 @@ export function SettingsScreen() {
       {/* Shop management */}
       <div className="section">
         <div className="section-title">Butikker</div>
-        <div className="kit-contents-list" style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
           {state.preferredShops.map((s) => (
-            <span key={s} className="kit-content-tag">{s}</span>
+            <div key={s.id} className="inventory-item" style={{ marginBottom: 0 }}>
+              <div className="inventory-item-info">
+                <div className="inventory-item-name">{s.name}</div>
+                <div className="inventory-item-meta">{s.url}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className="btn-icon" onClick={() => startEditShop(s.id, s.name, s.url)} title="Rediger">&#9998;</button>
+                <button className="btn-icon delete" onClick={() => removeShop(s.id)} title="Slett">&times;</button>
+              </div>
+            </div>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <input
             className="form-input"
             value={newShop}
             onChange={(e) => setNewShop(e.target.value)}
-            placeholder="Ny butikk..."
+            placeholder="Nytt butikknavn..."
+            style={{ flex: 1 }}
+          />
+          <input
+            className="form-input"
+            value={newShopUrl}
+            onChange={(e) => setNewShopUrl(e.target.value)}
+            placeholder="https://butikk.no/"
             style={{ flex: 1 }}
           />
           <button className="btn btn-primary btn-sm" onClick={handleAddShop}>Legg til</button>
         </div>
+        {editingShopId && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Rediger butikk</div>
+            <input className="form-input" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Butikknavn" />
+            <input className="form-input" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="https://butikk.no/" />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary btn-sm" onClick={saveEditShop}>Lagre</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditingShopId(null)}>Avbryt</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: 16, marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>

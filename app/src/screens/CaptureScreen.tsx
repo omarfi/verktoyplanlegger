@@ -115,7 +115,7 @@ export function CaptureScreen() {
 
   const handleAddCustomShop = () => {
     if (!customShop.trim()) return;
-    addShop(customShop.trim());
+    addShop({ name: customShop.trim(), url: 'https://' });
     setShop(customShop.trim());
     setCustomShop('');
     setShowCustomShop(false);
@@ -159,11 +159,11 @@ export function CaptureScreen() {
           </div>
 
           <div className="quick-launch">
-            <button className="quick-chip" onClick={() => window.open('https://jula.no', '_blank')}>Jula.no</button>
-            <button className="quick-chip" onClick={() => window.open('https://biltema.no', '_blank')}>Biltema.no</button>
-            <button className="quick-chip" onClick={() => window.open('https://clasohlson.no', '_blank')}>Clas Ohlson</button>
-            <button className="quick-chip" onClick={() => window.open('https://byggmax.no', '_blank')}>Byggmax.no</button>
-            <button className="quick-chip" onClick={() => window.open('https://obs.no', '_blank')}>Obs Bygg</button>
+            {shops.map((s) => (
+              <button key={s.id} className="quick-chip" onClick={() => window.open(s.url, '_blank')}>
+                {s.name}
+              </button>
+            ))}
           </div>
 
           <div style={{ marginTop: 16 }}>
@@ -200,7 +200,7 @@ export function CaptureScreen() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <select className="form-input" value={shop} onChange={(e) => setShop(e.target.value)} style={{ flex: 1 }}>
                     <option value="">Velg butikk...</option>
-                    {shops.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {shops.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
                   <button className="btn btn-ghost btn-sm" onClick={() => setShowCustomShop(true)}>+</button>
                 </div>

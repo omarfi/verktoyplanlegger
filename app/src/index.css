@@ -160,12 +160,12 @@ body {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  background: #f7f6f3;
+  background: #ffffff;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  padding: 0;
 }
 .tool-card-image img {
   width: 100%;
@@ -190,10 +190,10 @@ body {
   left: 4px;
   bottom: 4px;
   display: flex;
-  gap: 2px;
-  padding: 2px 4px;
+  gap: 6px;
+  padding: 0;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.88);
+  background: transparent;
 }
 .tool-card-info {
   padding: 6px 7px 8px;

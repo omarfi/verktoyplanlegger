@@ -43,7 +43,13 @@ export interface Kit {
 export interface AppState {
   tools: Tool[];
   kits: Kit[];
-  preferredShops: string[];
+  preferredShops: Shop[];
+}
+
+export interface Shop {
+  id: string;
+  name: string;
+  url: string;
 }
 
 export type ToolStatus = 'new' | 'gap' | 'shopping' | 'done' | 'move';

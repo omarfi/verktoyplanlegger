@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import type { AppState, Tool, Kit, InventoryItem, ProductCandidate } from './types';
+import type { AppState, Tool, Kit, InventoryItem, ProductCandidate, Shop } from './types';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
@@ -8,6 +8,14 @@ import { generateSeedTools } from './seedData';
 import { generateId } from './logic';
 
 const ALLOWED_EMAIL = 'omar1490@gmail.com';
+
+const DEFAULT_SHOPS: Shop[] = [
+  { id: 'shop-jula', name: 'Jula', url: 'https://www.jula.no/' },
+  { id: 'shop-biltema', name: 'Biltema', url: 'https://www.biltema.no/' },
+  { id: 'shop-clas', name: 'Clas Ohlson', url: 'https://www.clasohlson.no/' },
+  { id: 'shop-byggmax', name: 'Byggmax', url: 'https://www.byggmax.no/' },
+  { id: 'shop-obs', name: 'Obs Bygg', url: 'https://www.obsbygg.no/' },
+];
 
 /* ── Auth context ── */
 
@@ -89,7 +97,9 @@ interface AppContextValue {
   updateKit: (kitId: string, updates: Partial<Kit>) => void;
   removeKit: (kitId: string) => void;
   addCustomTool: (name: string, category: string, type: 'basic' | 'advanced') => void;
-  addShop: (shop: string) => void;
+  addShop: (shop: Omit<Shop, 'id'>) => void;
+  updateShop: (id: string, updates: Partial<Omit<Shop, 'id'>>) => void;
+  removeShop: (id: string) => void;
   resetAll: () => void;
 }
 
@@ -127,8 +137,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const unsubMeta = onSnapshot(prefsDoc, (snap) => {
       if (snap.exists()) {
-        const data = snap.data() as { preferredShops?: string[] };
-        setState((s) => ({ ...s, preferredShops: data.preferredShops ?? [] }));
+        const data = snap.data() as { preferredShops?: Shop[] | string[] };
+        const raw = data.preferredShops ?? [];
+        let needsMigration = false;
+        const shops: Shop[] = raw.map((s) => {
+          if (typeof s === 'string') {
+            needsMigration = true;
+            const lower = s.toLowerCase();
+            const knownUrl =
+              lower.includes('jula') ? 'https://www.jula.no/' :
+              lower.includes('biltema') ? 'https://www.biltema.no/' :
+              lower.includes('clas') ? 'https://www.clasohlson.no/' :
+              lower.includes('byggmax') ? 'https://www.byggmax.no/' :
+              lower.includes('obs') ? 'https://www.obsbygg.no/' :
+              'https://';
+            return { id: generateId(), name: s, url: knownUrl };
+          }
+          return s;
+        });
+        const finalShops = shops.length > 0 ? shops : DEFAULT_SHOPS;
+        if (needsMigration || shops.length === 0) {
+          setDoc(prefsDoc, { preferredShops: finalShops });
+        }
+        setState((s) => ({ ...s, preferredShops: finalShops }));
+      } else {
+        setDoc(prefsDoc, { preferredShops: DEFAULT_SHOPS });
+        setState((s) => ({ ...s, preferredShops: DEFAULT_SHOPS }));
       }
       metaLoaded = true;
       checkDone();
@@ -225,9 +259,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, tools: [...s.tools, tool] }));
       setDoc(doc(toolsCol, tool.id), tool);
     },
-    addShop: (shop: string) => {
+    addShop: (shop) => {
       setState((s) => {
-        const shops = [...s.preferredShops, shop];
+        const shops = [...s.preferredShops, { ...shop, id: generateId() }];
+        setDoc(prefsDoc, { preferredShops: shops });
+        return { ...s, preferredShops: shops };
+      });
+    },
+    updateShop: (id, updates) => {
+      setState((s) => {
+        const shops = s.preferredShops.map((shop) => (shop.id === id ? { ...shop, ...updates } : shop));
+        setDoc(prefsDoc, { preferredShops: shops });
+        return { ...s, preferredShops: shops };
+      });
+    },
+    removeShop: (id) => {
+      setState((s) => {
+        const shops = s.preferredShops.filter((shop) => shop.id !== id);
         setDoc(prefsDoc, { preferredShops: shops });
         return { ...s, preferredShops: shops };
       });
@@ -242,7 +290,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const batch2 = writeBatch(db);
       seedTools.forEach((t) => batch2.set(doc(toolsCol, t.id), t));
       batch2.set(prefsDoc, {
-        preferredShops: ['Jula', 'Biltema', 'Clas Ohlson', 'Byggmax', 'Obs Bygg'],
+        preferredShops: DEFAULT_SHOPS,
       });
       await batch2.commit();
     },

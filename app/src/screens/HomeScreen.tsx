@@ -130,7 +130,7 @@ export function HomeScreen() {
   };
 
   const HouseIcon = ({ color, filled }: { color: string; filled: boolean }) => (
-    <svg viewBox="0 0 20 20" width="13" height="13" style={!filled ? { opacity: 0.5 } : undefined}>
+    <svg viewBox="0 0 20 20" width="39" height="39" style={!filled ? { opacity: 0.5 } : undefined}>
       <path
         d="M3 10 L10 4 L17 10"
         fill="none"
