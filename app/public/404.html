@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verktøyplanlegger</title>
+    <script>
+      (function () {
+        var full = window.location.pathname + window.location.search + window.location.hash;
+        var base = '/verktoyplanlegger';
+        var path = full.startsWith(base) ? full.slice(base.length) : full;
+        if (!path.startsWith('/')) path = '/' + path;
+        window.location.replace(base + '/#' + path);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
