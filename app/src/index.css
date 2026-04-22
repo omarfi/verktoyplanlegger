@@ -203,7 +203,7 @@ body {
 /* Detail header */
 .detail-header {
   display: flex; align-items: center; gap: 12px; padding: 16px;
-  background: var(--card); border-bottom: 1px solid var(--border);
+  background: var(--bg); border-bottom: 1px solid #e3e1de;
 }
 
 .back-btn {
@@ -218,26 +218,34 @@ body {
 /* Sections */
 .section { padding: 16px; }
 
+.detail-wizard .section {
+  background: var(--bg);
+}
+
+.wizard-step {
+  border-top: 1px solid #e8e5e1;
+}
+
 .section-title {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 12px;
+  letter-spacing: 1.4px; color: #9aa1a9; margin-bottom: 12px;
 }
 
 /* Type toggle */
 .type-toggle {
-  display: flex; background: var(--border); border-radius: var(--radius-sm);
-  padding: 3px; margin-bottom: 16px;
+  display: flex; background: #e6e4e1; border-radius: 12px;
+  padding: 4px;
 }
 
 .type-toggle button {
-  flex: 1; padding: 8px 12px; border: none; border-radius: 6px;
+  flex: 1; padding: 11px 12px; border: none; border-radius: 10px;
   font-size: 13px; font-weight: 500; cursor: pointer;
-  background: transparent; color: var(--text-muted); transition: all 0.15s;
+  background: transparent; color: #7a7f87; transition: all 0.15s;
 }
 
 .type-toggle button.active {
-  background: var(--card); color: var(--text);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: #ffffff; color: var(--primary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 
 /* Inventory item */
@@ -564,6 +572,18 @@ body {
 
 /* Button row spacing */
 .btn-row { display: flex; gap: 8px; margin-top: 8px; }
+
+.wizard-outline-btn {
+  border: 1px dashed #c9c8c5;
+  color: #7f8790;
+  background: transparent;
+}
+
+.wizard-empty-btn {
+  border: 1px solid #d8d6d2;
+  background: transparent;
+  color: #cc3e35;
+}
 
 /* Login screen */
 .login-screen {

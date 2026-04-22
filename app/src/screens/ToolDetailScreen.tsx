@@ -22,6 +22,8 @@ export function ToolDetailScreen() {
 
   const sortedCandidates = [...tool.candidates].sort((a, b) => a.price - b.price);
   const lowestPrice = sortedCandidates.length > 0 ? sortedCandidates[0].price : null;
+  const [showCandidates, setShowCandidates] = useState(tool.candidates.length > 0);
+  const [showNotes, setShowNotes] = useState(false);
 
   const getShopClass = (shop: string) => {
     const lower = shop.toLowerCase();
@@ -34,7 +36,7 @@ export function ToolDetailScreen() {
   };
 
   return (
-    <div className="slide-in">
+    <div className="slide-in detail-wizard">
       <div className="detail-header">
         <button className="back-btn" onClick={() => navigate('/')}>&#8592;</button>
         <div>
@@ -46,8 +48,7 @@ export function ToolDetailScreen() {
         </div>
       </div>
 
-      {/* Type Toggle */}
-      <div className="section">
+      <div className="section wizard-step">
         <div className="type-toggle">
           <button
             className={tool.type === 'basic' ? 'active' : ''}
@@ -64,8 +65,7 @@ export function ToolDetailScreen() {
         </div>
       </div>
 
-      {/* Inventory */}
-      <div className="section">
+      <div className="section wizard-step">
         <div className="section-title">Beholdning ({tool.inventory.length})</div>
 
         {tool.inventory.map((item) => (
@@ -78,9 +78,9 @@ export function ToolDetailScreen() {
           />
         ))}
 
-        <div className="btn-row">
+        <div className="btn-row wizard-actions">
           <button
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-full wizard-outline-btn"
             onClick={() => navigate(`/capture/${tool.id}/existing`)}
           >
             + Legg til eksisterende
@@ -91,14 +91,14 @@ export function ToolDetailScreen() {
           <div className="btn-row" style={{ marginTop: 8 }}>
             {tool.inventory.length > 0 ? (
               <button
-                className="btn btn-primary btn-sm"
+                className="btn btn-primary btn-full"
                 onClick={() => updateTool(tool.id, { inventoryDone: true })}
               >
                 Ferdig med beholdning
               </button>
             ) : (
               <button
-                className="btn btn-ghost btn-sm"
+                className="btn btn-full wizard-empty-btn"
                 onClick={() => updateTool(tool.id, { inventoryDone: true })}
               >
                 Har ingen av denne
@@ -108,9 +108,8 @@ export function ToolDetailScreen() {
         )}
       </div>
 
-      {/* Gap Analysis */}
       {tool.inventoryDone && gaps && (
-        <div className="section">
+        <div className="section wizard-step">
           <div className="section-title">Behovsanalyse</div>
 
           {tool.type === 'basic' ? (
@@ -154,12 +153,19 @@ export function ToolDetailScreen() {
               )}
             </>
           )}
+
+          {(gaps.needsBuy.length > 0 || tool.candidates.length > 0) && (
+            <div className="btn-row" style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary btn-full" onClick={() => setShowCandidates((v) => !v)}>
+                {showCandidates ? 'Skjul kjøpskandidater' : 'Gå videre til kjøpskandidater'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Purchase Candidates */}
-      {tool.inventoryDone && (gaps?.needsBuy.length || tool.candidates.length > 0) ? (
-        <div className="section">
+      {tool.inventoryDone && showCandidates && (gaps?.needsBuy.length || tool.candidates.length > 0) ? (
+        <div className="section wizard-step">
           <div className="section-title">Kjøpskandidater</div>
 
           {sortedCandidates.map((candidate) => {
@@ -197,15 +203,19 @@ export function ToolDetailScreen() {
         </div>
       ) : null}
 
-      {/* Notes */}
-      <div className="section">
-        <div className="section-title">Notater</div>
-        <textarea
-          className="notes-textarea"
-          value={tool.notes}
-          onChange={(e) => updateTool(tool.id, { notes: e.target.value })}
-          placeholder="Valgfrie notater..."
-        />
+      <div className="section wizard-step">
+        <button className="btn btn-ghost btn-full" onClick={() => setShowNotes((v) => !v)}>
+          {showNotes ? 'Skjul notater' : 'Vis notater (valgfritt)'}
+        </button>
+        {showNotes && (
+          <textarea
+            className="notes-textarea"
+            value={tool.notes}
+            onChange={(e) => updateTool(tool.id, { notes: e.target.value })}
+            placeholder="Valgfrie notater..."
+            style={{ marginTop: 10 }}
+          />
+        )}
       </div>
     </div>
   );
