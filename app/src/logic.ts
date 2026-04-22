@@ -63,11 +63,11 @@ export function getStatusLabel(status: ToolStatus): string {
 
 export function getStatusColor(status: ToolStatus): { bg: string; text: string } {
   const map: Record<ToolStatus, { bg: string; text: string }> = {
-    new: { bg: '#e5e7eb', text: '#6b7280' },
-    gap: { bg: '#fee2e2', text: '#991b1b' },
-    shopping: { bg: '#dbeafe', text: '#1e3a5f' },
-    done: { bg: '#d1fae5', text: '#065f46' },
-    move: { bg: '#fef3c7', text: '#92400e' },
+    new: { bg: 'rgb(241,239,232)', text: 'rgb(95,94,90)' },
+    gap: { bg: 'rgb(250,236,231)', text: 'rgb(113,43,19)' },
+    shopping: { bg: 'rgb(230,241,251)', text: 'rgb(12,68,124)' },
+    done: { bg: 'rgb(234,243,222)', text: 'rgb(39,80,10)' },
+    move: { bg: 'rgb(250,238,218)', text: 'rgb(99,56,6)' },
   };
   return map[status];
 }

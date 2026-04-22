@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
-import { getStatus, locationLabel } from '../logic';
+import { getStatus } from '../logic';
 import { StatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
 import type { FilterStatus } from '../types';
@@ -93,12 +93,68 @@ export function HomeScreen() {
     return `${done}/${catTools.length}`;
   };
 
-  // Compute location summary for a tool
-  const getLocationSummary = (tool: typeof toolsWithStatus[0]) => {
-    if (tool.inventory.length === 0) return null;
-    const locations = [...new Set(tool.inventory.map((i) => i.location))];
-    return locations.map(locationLabel).join(' + ');
+  const categoryIcon = (category: string) => {
+    const map: Record<string, string> = {
+      'Måleverktøy': 'M3 14 L17 6 M3 16 L17 8 M4 4 L7 4',
+      'Merkeverktøy': 'M4 16 L14 6 L16 8 L6 18 L4 18 Z',
+      'Skrutrekkere og bits': 'M4 6 L12 14 M12 14 L16 18 M12 14 L18 8',
+      'Nøkler': 'M6 7 A3 3 0 1 1 6 13 L14 21 L16 19 L14 17 L16 15 L12 11',
+      'Tenger': 'M6 5 L10 11 L6 17 M14 5 L10 11 L14 17',
+      'Klemmer og tvinger': 'M5 6 L15 6 L15 10 L9 10 L9 14 L15 14 L15 18',
+      'Skjæreverktøy': 'M4 16 L16 4 M12 4 L16 8',
+      'Slagverktøy': 'M5 7 L13 7 L13 11 L9 11 L9 18',
+      'Åpne- og riveverktøy': 'M4 16 L10 10 L16 12',
+      'Slipeverktøy': 'M4 13 L8 9 L16 17 L12 21 Z',
+      'Elektrisk håndverktøy': 'M10 3 L6 11 H10 L8 19 L14 11 H10 Z',
+      'Rengjøring og vedlikehold': 'M5 7 L13 15 M13 15 L16 12 M9 3 L12 6',
+      'Oppbevaring': 'M4 8 H16 V18 H4 Z M4 11 H16',
+      'Arbeidslys': 'M10 4 L15 8 V14 L10 18 L5 14 V8 Z',
+    };
+    return map[category] || 'M4 10 H16 M10 4 V16';
   };
+
+  const getNeedCount = (type: 'basic' | 'advanced') => (type === 'basic' ? 2 : 1);
+
+  const getOwnCount = (tool: { inventory: { location: string }[]; type: 'basic' | 'advanced' }) => {
+    const need = getNeedCount(tool.type);
+    return Math.min(tool.inventory.length, need);
+  };
+
+  const getFractionColor = (tool: { type: 'basic' | 'advanced'; inventory: { location: string }[]; inventoryDone: boolean }) => {
+    const own = getOwnCount(tool);
+    const need = getNeedCount(tool.type);
+    if (!tool.inventoryDone) return '#bbb';
+    if (own >= need) return '#1D9E75';
+    if (own > 0) return '#BA7517';
+    return '#C0392B';
+  };
+
+  const HouseIcon = ({ color, filled }: { color: string; filled: boolean }) => (
+    <svg viewBox="0 0 20 20" width="13" height="13" style={!filled ? { opacity: 0.5 } : undefined}>
+      <path
+        d="M3 10 L10 4 L17 10"
+        fill="none"
+        stroke={color}
+        strokeWidth={filled ? 1.6 : 1.2}
+        strokeDasharray={filled ? undefined : '2.5 2'}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect
+        x="5"
+        y="10"
+        width="10"
+        height="8"
+        rx="1"
+        fill={filled ? color : 'none'}
+        fillOpacity={filled ? 0.85 : 1}
+        stroke={color}
+        strokeWidth={filled ? 0 : 1.2}
+        strokeDasharray={filled ? undefined : '2.5 2'}
+      />
+      {filled && <rect x="8.5" y="13" width="3" height="5" rx="0.5" fill="#fff" fillOpacity={0.7} />}
+    </svg>
+  );
 
   return (
     <>
@@ -132,8 +188,8 @@ export function HomeScreen() {
             <div className="category-header-left">
               <span className={`category-chevron ${!collapsed[category] ? 'open' : ''}`}>&#9654;</span>
               <span className="category-name">{category}</span>
-              <span className="category-count">{getCategoryDoneCount(category)}</span>
             </div>
+            <span className="category-count">{getCategoryDoneCount(category)}</span>
           </div>
           {!collapsed[category] && (
             <div className="tool-grid">
@@ -141,7 +197,10 @@ export function HomeScreen() {
                 const image = tool.inventory.find((i) => i.image)?.image
                   || tool.candidates.find((c) => c.image)?.image
                   || null;
-                const locSummary = getLocationSummary(tool);
+                const own = getOwnCount(tool);
+                const need = getNeedCount(tool.type);
+                const hasMine = tool.inventory.some((i) => i.location === 'mine');
+                const hasParents = tool.inventory.some((i) => i.location === 'parents');
 
                 return (
                   <div key={tool.id} className="tool-card" onClick={() => navigate(`/tool/${tool.id}`)}>
@@ -149,17 +208,28 @@ export function HomeScreen() {
                       {image ? (
                         <img src={image} alt={tool.name} />
                       ) : (
-                        <div className="tool-card-placeholder">&#128295;</div>
+                        <div className="tool-card-placeholder" aria-hidden="true">
+                          <svg viewBox="0 0 20 20" width="28" height="28">
+                            <path d={categoryIcon(tool.category)} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
                       )}
                       <div className="tool-card-badge">
                         <StatusBadge status={tool.status} />
                       </div>
+                      {tool.inventoryDone && (
+                        <div className="tool-houses-overlay">
+                          <HouseIcon color="#C0392B" filled={hasMine} />
+                          {tool.type === 'basic' && <HouseIcon color="#7f8c8d" filled={hasParents} />}
+                        </div>
+                      )}
                     </div>
                     <div className="tool-card-info">
                       <div className="tool-card-name">{tool.name}</div>
-                      <div className="tool-card-meta">
-                        {locSummary || 'Ingen registrert'}
-                        {tool.inventory.length > 0 && ` \u00b7 ${tool.inventory.length} stk`}
+                      <div className="tool-card-meta compact">
+                        <span className="tool-card-fraction" style={{ color: getFractionColor(tool) }}>
+                          {own}/{need}
+                        </span>
                       </div>
                     </div>
                   </div>
