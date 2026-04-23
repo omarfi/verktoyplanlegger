@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
 import { detectShop } from '../logic';
 import { extractProductFromUrl } from '../ai';
+import { searchImages } from '../imageSearch';
 
 export function CaptureScreen() {
   const { toolId, mode } = useParams<{ toolId: string; mode: string }>();
@@ -14,6 +15,10 @@ export function CaptureScreen() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [captured, setCaptured] = useState(false);
+  const [searchingImages, setSearchingImages] = useState(false);
+  const [imageSearchQuery, setImageSearchQuery] = useState('');
+  const [imageResults, setImageResults] = useState<Array<{ url: string; thumb: string; title: string }>>([]);
+  const [imageSearchError, setImageSearchError] = useState<string | null>(null);
 
   // Form fields
   const [name, setName] = useState('');
@@ -133,6 +138,25 @@ export function CaptureScreen() {
 
   const shops = state.preferredShops;
 
+  const handleImageSearch = async () => {
+    const query = (imageSearchQuery || name || tool?.name || '').trim();
+    if (!query) return;
+
+    setSearchingImages(true);
+    setImageSearchError(null);
+    try {
+      const results = await searchImages(query, 24);
+      setImageResults(results);
+      if (results.length === 0) {
+        setImageSearchError('Ingen bilder funnet. Prøv et annet søk.');
+      }
+    } catch {
+      setImageSearchError('Klarte ikke å hente bilder akkurat nå.');
+    } finally {
+      setSearchingImages(false);
+    }
+  };
+
   return (
     <div className="slide-in">
       <div className="detail-header">
@@ -179,6 +203,37 @@ export function CaptureScreen() {
           <div className="form-group">
             <label className="form-label">Bilde-URL *</label>
             <input className="form-input" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                className="form-input"
+                value={imageSearchQuery}
+                onChange={(e) => setImageSearchQuery(e.target.value)}
+                placeholder="Søk etter bilde..."
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-secondary btn-sm" onClick={handleImageSearch} disabled={searchingImages}>
+                {searchingImages ? 'Søker...' : 'Søk bilde'}
+              </button>
+            </div>
+
+            {imageSearchError && (
+              <div style={{ marginTop: 8, fontSize: 12, color: '#9b1c1c' }}>{imageSearchError}</div>
+            )}
+
+            {imageResults.length > 0 && (
+              <div className="image-search-grid">
+                {imageResults.map((result) => (
+                  <button
+                    key={result.url}
+                    className={`image-search-card ${image === result.url ? 'selected' : ''}`}
+                    onClick={() => setImage(result.url)}
+                    title={result.title}
+                  >
+                    <img src={result.thumb} alt={result.title} loading="lazy" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {mode !== 'existing' && (
