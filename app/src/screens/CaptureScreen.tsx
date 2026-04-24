@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
 import { detectShop } from '../logic';
 import { extractProductFromUrl } from '../ai';
-import { GoogleImageSearchError, searchImages } from '../imageSearch';
+import { searchImages } from '../imageSearch';
 
 export function CaptureScreen() {
   const { toolId, mode } = useParams<{ toolId: string; mode: string }>();
@@ -19,7 +19,6 @@ export function CaptureScreen() {
   const [imageSearchQuery, setImageSearchQuery] = useState(tool?.name || '');
   const [imageResults, setImageResults] = useState<Array<{ url: string; thumb: string; title: string }>>([]);
   const [imageSearchError, setImageSearchError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   const [name, setName] = useState(tool?.name || '');
   const [price, setPrice] = useState('');
@@ -50,7 +49,6 @@ export function CaptureScreen() {
 
     setSearchingImages(true);
     setImageSearchError(null);
-    setDebugInfo(null);
     try {
       const results = await searchImages(query, 24);
       setImageResults(results);
@@ -61,19 +59,6 @@ export function CaptureScreen() {
       const msg = err instanceof Error ? err.message : 'Google-bildesøk feilet.';
       setImageSearchError(msg);
       setImageResults([]);
-      if (err instanceof GoogleImageSearchError) {
-        const key = (import.meta.env.VITE_GOOGLE_CSE_API_KEY as string | undefined) ?? '';
-        const cx = (import.meta.env.VITE_GOOGLE_CSE_CX as string | undefined) ?? '';
-        const keyPreview = key ? `${key.slice(0, 8)}...(${key.length})` : 'MISSING';
-        const cxPreview = cx ? `${cx.slice(0, 8)}...(${cx.length})` : 'MISSING';
-        setDebugInfo([
-          `status=${err.status ?? 'unknown'}`,
-          `consumer=${err.consumerProject ?? 'unknown'}`,
-          `key=${keyPreview}`,
-          `cx=${cxPreview}`,
-          `origin=${window.location.origin}`,
-        ].join(' | '));
-      }
     } finally {
       setSearchingImages(false);
     }
@@ -230,11 +215,6 @@ export function CaptureScreen() {
               </div>
 
               {imageSearchError && <div style={{ marginTop: 8, fontSize: 12, color: '#9b1c1c' }}>{imageSearchError}</div>}
-              {debugInfo && (
-                <div style={{ marginTop: 6, fontSize: 11, color: '#6b7280', wordBreak: 'break-word' }}>
-                  Debug: {debugInfo}
-                </div>
-              )}
 
               {imageResults.length > 0 && (
                 <div className="image-search-grid">

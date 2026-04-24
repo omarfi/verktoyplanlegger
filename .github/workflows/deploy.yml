@@ -38,6 +38,7 @@ jobs:
         env:
           VITE_GOOGLE_CSE_API_KEY: ${{ secrets.VITE_GOOGLE_CSE_API_KEY }}
           VITE_GOOGLE_CSE_CX: ${{ secrets.VITE_GOOGLE_CSE_CX }}
+          VITE_SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
