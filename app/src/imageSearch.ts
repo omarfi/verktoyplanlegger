@@ -37,9 +37,21 @@ export async function searchImages(query: string, limit = 24): Promise<ImageSear
     num: String(Math.min(Math.max(limit, 1), 40)),
   });
 
-  const response = await fetch(`${proxyBase.replace(/\/$/, '')}/search?${params.toString()}`, {
-    signal: AbortSignal.timeout(12000),
-  });
+  const requestUrl = `${proxyBase.replace(/\/$/, '')}/search?${params.toString()}`;
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      mode: 'cors',
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch {
+    await new Promise((r) => setTimeout(r, 400));
+    response = await fetch(requestUrl, {
+      mode: 'cors',
+      signal: AbortSignal.timeout(30000),
+    });
+  }
 
   if (!response.ok) {
     let message = `Bildesøk feilet (${response.status})`;
