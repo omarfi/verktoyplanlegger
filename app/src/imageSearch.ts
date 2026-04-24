@@ -42,7 +42,14 @@ async function searchImagesViaGoogleCse(query: string, limit: number): Promise<I
       signal: AbortSignal.timeout(12000),
     });
     if (!response.ok) {
-      throw new Error(`Google image search feilet med HTTP ${response.status}`);
+      let detail = '';
+      try {
+        const body = await response.json() as { error?: { message?: string } };
+        detail = body.error?.message ? `: ${body.error.message}` : '';
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(`Google image search feilet (${response.status})${detail}`);
     }
 
     const data = (await response.json()) as GoogleCseResponse;
@@ -58,7 +65,8 @@ async function searchImagesViaGoogleCse(query: string, limit: number): Promise<I
         } satisfies ImageSearchResult;
       })
       .filter((x): x is ImageSearchResult => Boolean(x));
-  } catch {
+  } catch (err) {
+    if (err instanceof Error) throw err;
     throw new Error('Google image search feilet');
   }
 }

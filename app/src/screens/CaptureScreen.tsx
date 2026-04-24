@@ -55,8 +55,9 @@ export function CaptureScreen() {
       if (results.length === 0) {
         setImageSearchError('Ingen bilder funnet. Prøv et annet søk.');
       }
-    } catch {
-      setImageSearchError('Google-bildesøk feilet. Sjekk credentials/API-kvote.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Google-bildesøk feilet.';
+      setImageSearchError(msg);
       setImageResults([]);
     } finally {
       setSearchingImages(false);
