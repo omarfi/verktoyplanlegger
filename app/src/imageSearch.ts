@@ -27,23 +27,17 @@ export async function searchImages(query: string, limit = 24): Promise<ImageSear
   const q = query.trim();
   if (!q) return [];
 
-  const apiKey = import.meta.env.VITE_SERP_API_KEY as string | undefined;
-  if (!apiKey) {
-    throw new ImageSearchError('SERP API key mangler i deploy-miljøet');
+  const proxyBase = import.meta.env.VITE_IMAGE_SEARCH_PROXY_URL as string | undefined;
+  if (!proxyBase) {
+    throw new ImageSearchError('VITE_IMAGE_SEARCH_PROXY_URL mangler i deploy-miljøet');
   }
 
   const params = new URLSearchParams({
-    engine: 'google_images',
-    api_key: apiKey,
-    google_domain: 'google.no',
     q,
-    hl: 'no',
-    gl: 'no',
-    location: 'Oslo, Oslo, Norway',
     num: String(Math.min(Math.max(limit, 1), 40)),
   });
 
-  const response = await fetch(`https://serpapi.com/search.json?${params.toString()}`, {
+  const response = await fetch(`${proxyBase.replace(/\/$/, '')}/search?${params.toString()}`, {
     signal: AbortSignal.timeout(12000),
   });
 
