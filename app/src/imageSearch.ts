@@ -41,10 +41,9 @@ export async function searchImages(query: string, limit = 24): Promise<ImageSear
     gl: 'no',
     location: 'Oslo, Oslo, Norway',
     num: String(Math.min(Math.max(limit, 1), 40)),
-    output: 'json',
   });
 
-  const response = await fetch(`https://serpapi.com/search?${params.toString()}`, {
+  const response = await fetch(`https://serpapi.com/search.json?${params.toString()}`, {
     signal: AbortSignal.timeout(12000),
   });
 
