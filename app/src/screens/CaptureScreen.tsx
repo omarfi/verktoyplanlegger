@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
 import { detectShop } from '../logic';
@@ -14,14 +14,13 @@ export function CaptureScreen() {
 
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [captured, setCaptured] = useState(false);
+  const [captured, setCaptured] = useState(mode === 'existing');
   const [searchingImages, setSearchingImages] = useState(false);
-  const [imageSearchQuery, setImageSearchQuery] = useState('');
+  const [imageSearchQuery, setImageSearchQuery] = useState(tool?.name || '');
   const [imageResults, setImageResults] = useState<Array<{ url: string; thumb: string; title: string }>>([]);
   const [imageSearchError, setImageSearchError] = useState<string | null>(null);
 
-  // Form fields
-  const [name, setName] = useState('');
+  const [name, setName] = useState(tool?.name || '');
   const [price, setPrice] = useState('');
   const [image, setImage] = useState('');
   const [shop, setShop] = useState('');
@@ -29,15 +28,49 @@ export function CaptureScreen() {
   const [articleNumber, setArticleNumber] = useState('');
   const [location, setLocation] = useState<'mine' | 'parents'>('mine');
 
-  // Kit fields — tool IDs
   const [kitToolIds, setKitToolIds] = useState<string[]>([]);
   const [toolSearch, setToolSearch] = useState('');
 
-  // Custom shop
   const [showCustomShop, setShowCustomShop] = useState(false);
   const [customShop, setCustomShop] = useState('');
 
   const isImageUrl = (u: string) => /\.(jpg|jpeg|png|webp|gif|svg)(\?|$)/i.test(u);
+
+  useEffect(() => {
+    if (tool?.name) {
+      setName((prev) => prev || tool.name);
+      setImageSearchQuery((prev) => prev || tool.name);
+    }
+  }, [tool?.name]);
+
+  const handleImageSearch = async (forcedQuery?: string) => {
+    const query = (forcedQuery ?? imageSearchQuery ?? name ?? tool?.name ?? '').trim();
+    if (!query) return;
+
+    setSearchingImages(true);
+    setImageSearchError(null);
+    try {
+      const results = await searchImages(query, 24);
+      setImageResults(results);
+      if (results.length === 0) {
+        setImageSearchError('Ingen bilder funnet. Prøv et annet søk.');
+      }
+    } catch {
+      setImageSearchError('Google-bildesøk feilet. Sjekk credentials/API-kvote.');
+      setImageResults([]);
+    } finally {
+      setSearchingImages(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mode !== 'existing' || !captured) return;
+    const q = (tool?.name || name || '').trim();
+    if (!q) return;
+    handleImageSearch(q);
+    // intentionally run on entry
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, captured, tool?.name]);
 
   const handleCapture = async () => {
     if (!url.trim()) return;
@@ -61,8 +94,8 @@ export function CaptureScreen() {
       if (result.image_url) setImage(result.image_url);
       if (result.shop) setShop(result.shop);
       if (result.article_number) setArticleNumber(result.article_number);
-    } catch (err) {
-      console.error('Extraction failed:', err);
+    } catch {
+      // silent fallback to manual fields
     }
 
     setCaptured(true);
@@ -70,15 +103,9 @@ export function CaptureScreen() {
   };
 
   const isValid = () => {
-    if (mode === 'existing') {
-      return image.trim() && name.trim() && location;
-    }
-    if (mode === 'candidate') {
-      return image.trim() && productUrl.trim() && name.trim() && shop.trim() && price.trim();
-    }
-    if (mode === 'kit') {
-      return image.trim() && productUrl.trim() && name.trim() && shop.trim() && price.trim() && kitToolIds.length > 0;
-    }
+    if (mode === 'existing') return image.trim() && name.trim() && location;
+    if (mode === 'candidate') return image.trim() && productUrl.trim() && name.trim() && shop.trim() && price.trim();
+    if (mode === 'kit') return image.trim() && productUrl.trim() && name.trim() && shop.trim() && price.trim() && kitToolIds.length > 0;
     return false;
   };
 
@@ -90,7 +117,7 @@ export function CaptureScreen() {
       addInventoryItem(toolId!, {
         location,
         name: name || tool?.name || '',
-        image: image,
+        image,
         url: productUrl || url || null,
         shop: shop || null,
         price: priceNum,
@@ -126,7 +153,6 @@ export function CaptureScreen() {
     setShowCustomShop(false);
   };
 
-  // Filter tools for kit content search
   const filteredTools = toolSearch.trim()
     ? state.tools.filter((t) =>
         t.name.toLowerCase().includes(toolSearch.toLowerCase()) &&
@@ -135,27 +161,7 @@ export function CaptureScreen() {
     : [];
 
   const modeLabel = mode === 'existing' ? 'finn eksisterende' : mode === 'candidate' ? 'finn kandidat' : 'legg til sett';
-
   const shops = state.preferredShops;
-
-  const handleImageSearch = async () => {
-    const query = (imageSearchQuery || name || tool?.name || '').trim();
-    if (!query) return;
-
-    setSearchingImages(true);
-    setImageSearchError(null);
-    try {
-      const results = await searchImages(query, 24);
-      setImageResults(results);
-      if (results.length === 0) {
-        setImageSearchError('Ingen bilder funnet. Prøv et annet søk.');
-      }
-    } catch {
-      setImageSearchError('Klarte ikke å hente bilder akkurat nå.');
-    } finally {
-      setSearchingImages(false);
-    }
-  };
 
   return (
     <div className="slide-in">
@@ -171,15 +177,8 @@ export function CaptureScreen() {
         <div className="url-paste-area">
           <div className="form-label">Lim inn URL til produktside eller bilde</div>
           <div className="url-input-row">
-            <input
-              className="form-input"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://jula.no/..."
-            />
-            <button className="btn btn-primary" onClick={handleCapture} disabled={loading}>
-              {loading ? '...' : 'Fang'}
-            </button>
+            <input className="form-input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://jula.no/..." />
+            <button className="btn btn-primary" onClick={handleCapture} disabled={loading}>{loading ? '...' : 'Fang'}</button>
           </div>
 
           <div className="quick-launch">
@@ -198,42 +197,46 @@ export function CaptureScreen() {
         </div>
       ) : (
         <div className="section">
+          {mode === 'existing' && (
+            <div className="form-group">
+              <label className="form-label">Bildesøk</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="form-input"
+                  value={imageSearchQuery}
+                  onChange={(e) => setImageSearchQuery(e.target.value)}
+                  placeholder="Søk etter bilde..."
+                  style={{ flex: 1 }}
+                />
+                <button className="btn btn-secondary btn-sm" onClick={() => handleImageSearch()} disabled={searchingImages}>
+                  {searchingImages ? 'Søker...' : 'Søk'}
+                </button>
+              </div>
+
+              {imageSearchError && <div style={{ marginTop: 8, fontSize: 12, color: '#9b1c1c' }}>{imageSearchError}</div>}
+
+              {imageResults.length > 0 && (
+                <div className="image-search-grid">
+                  {imageResults.map((result) => (
+                    <button
+                      key={result.url}
+                      className={`image-search-card ${image === result.url ? 'selected' : ''}`}
+                      onClick={() => setImage(result.url)}
+                      title={result.title}
+                    >
+                      <img src={result.thumb} alt={result.title} loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {image && <img className="image-preview" src={image} alt="Produkt" />}
 
           <div className="form-group">
             <label className="form-label">Bilde-URL *</label>
             <input className="form-input" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." />
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input
-                className="form-input"
-                value={imageSearchQuery}
-                onChange={(e) => setImageSearchQuery(e.target.value)}
-                placeholder="Søk etter bilde..."
-                style={{ flex: 1 }}
-              />
-              <button className="btn btn-secondary btn-sm" onClick={handleImageSearch} disabled={searchingImages}>
-                {searchingImages ? 'Søker...' : 'Søk bilde'}
-              </button>
-            </div>
-
-            {imageSearchError && (
-              <div style={{ marginTop: 8, fontSize: 12, color: '#9b1c1c' }}>{imageSearchError}</div>
-            )}
-
-            {imageResults.length > 0 && (
-              <div className="image-search-grid">
-                {imageResults.map((result) => (
-                  <button
-                    key={result.url}
-                    className={`image-search-card ${image === result.url ? 'selected' : ''}`}
-                    onClick={() => setImage(result.url)}
-                    title={result.title}
-                  >
-                    <img src={result.thumb} alt={result.title} loading="lazy" />
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {mode !== 'existing' && (
@@ -288,11 +291,7 @@ export function CaptureScreen() {
               <label className="form-label">Plassering *</label>
               <div className="location-options">
                 {(['mine', 'parents'] as const).map((loc) => (
-                  <button
-                    key={loc}
-                    className={`location-option ${location === loc ? 'selected' : ''}`}
-                    onClick={() => setLocation(loc)}
-                  >
+                  <button key={loc} className={`location-option ${location === loc ? 'selected' : ''}`} onClick={() => setLocation(loc)}>
                     {loc === 'mine' ? 'Raschs Vei' : 'Østerliveien'}
                   </button>
                 ))}
@@ -315,19 +314,11 @@ export function CaptureScreen() {
                   })}
                 </div>
               )}
-              <input
-                className="form-input"
-                value={toolSearch}
-                onChange={(e) => setToolSearch(e.target.value)}
-                placeholder="Søk etter verktøy..."
-              />
+              <input className="form-input" value={toolSearch} onChange={(e) => setToolSearch(e.target.value)} placeholder="Søk etter verktøy..." />
               {filteredTools.length > 0 && (
                 <div className="dropdown-list">
                   {filteredTools.slice(0, 10).map((t) => (
-                    <div key={t.id} className="dropdown-item" onClick={() => {
-                      setKitToolIds([...kitToolIds, t.id]);
-                      setToolSearch('');
-                    }}>
+                    <div key={t.id} className="dropdown-item" onClick={() => { setKitToolIds([...kitToolIds, t.id]); setToolSearch(''); }}>
                       {t.name} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({t.category})</span>
                     </div>
                   ))}
@@ -336,10 +327,7 @@ export function CaptureScreen() {
               {toolSearch.trim() && filteredTools.length === 0 && (
                 <div style={{ padding: '8px 0', fontSize: 13, color: 'var(--text-muted)' }}>
                   Ingen treff.{' '}
-                  <button className="btn btn-ghost btn-sm" onClick={() => {
-                    addCustomTool(toolSearch.trim(), 'Annet', 'basic');
-                    setToolSearch('');
-                  }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => { addCustomTool(toolSearch.trim(), 'Annet', 'basic'); setToolSearch(''); }}>
                     + Legg til verktøy &ldquo;{toolSearch.trim()}&rdquo;
                   </button>
                 </div>
@@ -347,11 +335,7 @@ export function CaptureScreen() {
             </div>
           )}
 
-          <button
-            className="btn btn-primary btn-full"
-            onClick={handleSave}
-            disabled={!isValid()}
-          >
+          <button className="btn btn-primary btn-full" onClick={handleSave} disabled={!isValid()}>
             {mode === 'existing' ? 'Legg til i beholdning' : mode === 'candidate' ? 'Legg til som kandidat' : 'Lagre sett'}
           </button>
         </div>
