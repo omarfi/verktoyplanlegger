@@ -4,6 +4,18 @@ export interface ImageSearchResult {
   title: string;
 }
 
+export class GoogleImageSearchError extends Error {
+  status?: number;
+  consumerProject?: string;
+
+  constructor(message: string, status?: number, consumerProject?: string) {
+    super(message);
+    this.name = 'GoogleImageSearchError';
+    this.status = status;
+    this.consumerProject = consumerProject;
+  }
+}
+
 interface GoogleCseResponse {
   items?: Array<{
     link?: string;
@@ -25,7 +37,7 @@ async function searchImagesViaGoogleCse(query: string, limit: number): Promise<I
   const apiKey = import.meta.env.VITE_GOOGLE_CSE_API_KEY as string | undefined;
   const cx = import.meta.env.VITE_GOOGLE_CSE_CX as string | undefined;
   if (!apiKey || !cx) {
-    throw new Error('Google Search credentials mangler');
+    throw new GoogleImageSearchError('Google Search credentials mangler');
   }
 
   const params = new URLSearchParams({
@@ -43,13 +55,28 @@ async function searchImagesViaGoogleCse(query: string, limit: number): Promise<I
     });
     if (!response.ok) {
       let detail = '';
+      let consumerProject: string | undefined;
       try {
-        const body = await response.json() as { error?: { message?: string } };
+        const body = await response.json() as {
+          error?: {
+            message?: string;
+            details?: Array<{
+              metadata?: {
+                consumer?: string;
+              };
+            }>;
+          };
+        };
         detail = body.error?.message ? `: ${body.error.message}` : '';
+        consumerProject = body.error?.details?.find((d) => d.metadata?.consumer)?.metadata?.consumer;
       } catch {
         // ignore parse errors
       }
-      throw new Error(`Google image search feilet (${response.status})${detail}`);
+      throw new GoogleImageSearchError(
+        `Google image search feilet (${response.status})${detail}`,
+        response.status,
+        consumerProject,
+      );
     }
 
     const data = (await response.json()) as GoogleCseResponse;
@@ -66,7 +93,8 @@ async function searchImagesViaGoogleCse(query: string, limit: number): Promise<I
       })
       .filter((x): x is ImageSearchResult => Boolean(x));
   } catch (err) {
-    if (err instanceof Error) throw err;
-    throw new Error('Google image search feilet');
+    if (err instanceof GoogleImageSearchError) throw err;
+    if (err instanceof Error) throw new GoogleImageSearchError(err.message);
+    throw new GoogleImageSearchError('Google image search feilet');
   }
 }
