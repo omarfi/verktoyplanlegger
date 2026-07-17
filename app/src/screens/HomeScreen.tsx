@@ -196,6 +196,7 @@ export function HomeScreen() {
               {tools.map((tool) => {
                 const image = tool.inventory.find((i) => i.image)?.image
                   || tool.candidates.find((c) => c.image)?.image
+                  || tool.image
                   || null;
                 const own = getOwnCount(tool);
                 const need = getNeedCount(tool.type);

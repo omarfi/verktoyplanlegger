@@ -4,10 +4,12 @@ import { useApp, useAuth } from '../store';
 import { ConfirmDialog } from '../components/Modal';
 
 export function SettingsScreen() {
-  const { state, resetAll, addShop, updateShop, removeShop } = useApp();
+  const { state, resetAll, addShop, updateShop, removeShop, importSheetData } = useApp();
   const { logOut } = useAuth();
   const navigate = useNavigate();
   const [showReset, setShowReset] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [newShop, setNewShop] = useState('');
   const [newShopUrl, setNewShopUrl] = useState('https://');
   const [editingShopId, setEditingShopId] = useState<string | null>(null);
@@ -98,6 +100,11 @@ export function SettingsScreen() {
         <span className="chevron">&#128203;</span>
       </div>
 
+      <div className="settings-row" onClick={() => !importing && setShowImport(true)}>
+        <span>{importing ? 'Importerer...' : 'Importer verktøyoversikt (regneark)'}</span>
+        <span className="chevron">&#8635;</span>
+      </div>
+
       {/* Shop management */}
       <div className="section">
         <div className="section-title">Butikker</div>
@@ -153,6 +160,28 @@ export function SettingsScreen() {
           Logg ut
         </button>
       </div>
+
+      <ConfirmDialog
+        open={showImport}
+        title="Importer fra regnearket?"
+        message="Data fra verktoyoversikt-regnearket skrives inn i databasen. Verktøy med tellinger i regnearket får beholdningen erstattet av regnearkets antall; øvrige verktøy beholdes som de er."
+        confirmLabel="Importer"
+        onConfirm={async () => {
+          setShowImport(false);
+          setImporting(true);
+          try {
+            const result = await importSheetData();
+            alert(result
+              ? `Import ferdig: ${result.updated} verktøy oppdatert, ${result.created} nye.`
+              : 'Importen var allerede utført.');
+          } catch {
+            alert('Importen feilet. Prøv igjen.');
+          } finally {
+            setImporting(false);
+          }
+        }}
+        onCancel={() => setShowImport(false)}
+      />
 
       <ConfirmDialog
         open={showReset}

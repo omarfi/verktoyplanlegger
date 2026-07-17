@@ -28,6 +28,7 @@ export interface Tool {
   candidates: ProductCandidate[];
   chosen: number | null;
   notes: string;
+  image?: string;
 }
 
 export interface Kit {

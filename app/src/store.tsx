@@ -1,10 +1,11 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import type { AppState, Tool, Kit, InventoryItem, ProductCandidate, Shop } from './types';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
 import { generateSeedTools } from './seedData';
+import { runSheetImport, type SheetImportResult } from './sheetImport';
 import { generateId } from './logic';
 
 const ALLOWED_EMAIL = 'omar1490@gmail.com';
@@ -100,6 +101,7 @@ interface AppContextValue {
   addShop: (shop: Omit<Shop, 'id'>) => void;
   updateShop: (id: string, updates: Partial<Omit<Shop, 'id'>>) => void;
   removeShop: (id: string) => void;
+  importSheetData: () => Promise<SheetImportResult | null>;
   resetAll: () => void;
 }
 
@@ -112,6 +114,18 @@ const prefsDoc = doc(db, 'meta', 'prefs');
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({ tools: [], kits: [], preferredShops: [] });
   const [loading, setLoading] = useState(true);
+  const toolsRef = useRef<Tool[]>([]);
+  toolsRef.current = state.tools;
+  const importAttempted = useRef(false);
+
+  // Engangsimport av verktoyoversikt-regnearket når dataene er lastet.
+  useEffect(() => {
+    if (loading || importAttempted.current) return;
+    importAttempted.current = true;
+    runSheetImport(toolsRef.current).catch((e) => {
+      console.error('Import av regnearkdata feilet:', e);
+    });
+  }, [loading]);
 
   useEffect(() => {
     let toolsLoaded = false;
@@ -280,6 +294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { ...s, preferredShops: shops };
       });
     },
+    importSheetData: () => runSheetImport(toolsRef.current, true),
     resetAll: async () => {
       const batch = writeBatch(db);
       state.tools.forEach((t) => batch.delete(doc(toolsCol, t.id)));
