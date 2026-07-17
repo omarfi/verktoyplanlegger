@@ -1,34 +1,15 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
-import type { AppState, Tool, Kit, InventoryItem, ProductCandidate, Shop } from './types';
-import type { User } from 'firebase/auth';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
+import type { Tool } from './types';
+import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
-import { generateSeedTools } from './seedData';
-import { runSheetImport, cleanupNonSheetTools, findToolsNotInSheet, type SheetImportResult, type CleanupResult } from './sheetImport';
+import { migrateTool, runMigration } from './migration';
 import { generateId } from './logic';
+import { AuthContext, AppContext, type AppContextValue } from './context';
 
 const ALLOWED_EMAIL = 'omar1490@gmail.com';
 
-const DEFAULT_SHOPS: Shop[] = [
-  { id: 'shop-jula', name: 'Jula', url: 'https://www.jula.no/' },
-  { id: 'shop-biltema', name: 'Biltema', url: 'https://www.biltema.no/' },
-  { id: 'shop-clas', name: 'Clas Ohlson', url: 'https://www.clasohlson.no/' },
-  { id: 'shop-byggmax', name: 'Byggmax', url: 'https://www.byggmax.no/' },
-  { id: 'shop-obs', name: 'Obs Bygg', url: 'https://www.obsbygg.no/' },
-];
-
-/* ── Auth context ── */
-
-interface AuthContextValue {
-  user: User | null;
-  loading: boolean;
-  signIn: () => Promise<void>;
-  logOut: () => Promise<void>;
-  authError: string | null;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+/* ── Auth provider ── */
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -75,252 +56,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
-  return ctx;
-}
-
-/* ── App data context (Firestore-backed, global shared data) ── */
-
-interface AppContextValue {
-  state: AppState;
-  loading: boolean;
-  updateTool: (id: string, updates: Partial<Tool>) => void;
-  addInventoryItem: (toolId: string, item: Omit<InventoryItem, 'id'>) => void;
-  updateInventoryItem: (toolId: string, itemId: string, updates: Partial<InventoryItem>) => void;
-  removeInventoryItem: (toolId: string, itemId: string) => void;
-  addCandidate: (toolId: string, candidate: Omit<ProductCandidate, 'id'>) => void;
-  updateCandidate: (toolId: string, candidateId: string, updates: Partial<ProductCandidate>) => void;
-  removeCandidate: (toolId: string, candidateId: string) => void;
-  chooseCandidate: (toolId: string, index: number | null) => void;
-  addKit: (kit: Omit<Kit, 'id'>) => void;
-  updateKit: (kitId: string, updates: Partial<Kit>) => void;
-  removeKit: (kitId: string) => void;
-  addCustomTool: (name: string, category: string, type: 'basic' | 'advanced') => void;
-  addShop: (shop: Omit<Shop, 'id'>) => void;
-  updateShop: (id: string, updates: Partial<Omit<Shop, 'id'>>) => void;
-  removeShop: (id: string) => void;
-  importSheetData: () => Promise<SheetImportResult | null>;
-  previewNonSheetTools: () => Tool[];
-  cleanupNonSheetTools: () => Promise<CleanupResult>;
-  resetAll: () => void;
-}
-
-const AppContext = createContext<AppContextValue | null>(null);
+/* ── App data provider (Firestore-backed, global shared data) ── */
 
 const toolsCol = collection(db, 'tools');
-const kitsCol = collection(db, 'kits');
-const prefsDoc = doc(db, 'meta', 'prefs');
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>({ tools: [], kits: [], preferredShops: [] });
+  const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
-  const toolsRef = useRef<Tool[]>([]);
-  toolsRef.current = state.tools;
-  const importAttempted = useRef(false);
-
-  // Engangsimport av verktoyoversikt-regnearket når dataene er lastet.
-  useEffect(() => {
-    if (loading || importAttempted.current) return;
-    importAttempted.current = true;
-    runSheetImport(toolsRef.current).catch((e) => {
-      console.error('Import av regnearkdata feilet:', e);
-    });
-  }, [loading]);
+  const migrationAttempted = useRef(false);
 
   useEffect(() => {
-    let toolsLoaded = false;
-    let kitsLoaded = false;
-    let metaLoaded = false;
-    const checkDone = () => {
-      if (toolsLoaded && kitsLoaded && metaLoaded) setLoading(false);
-    };
-
-    const unsubTools = onSnapshot(toolsCol, (snap) => {
-      const tools = snap.docs.map((d) => d.data() as Tool);
-      setState((s) => ({ ...s, tools }));
-      toolsLoaded = true;
-      checkDone();
+    const unsub = onSnapshot(toolsCol, (snap) => {
+      setTools(snap.docs.map((d) => migrateTool(d.data())));
+      setLoading(false);
     });
-
-    const unsubKits = onSnapshot(kitsCol, (snap) => {
-      const kits = snap.docs.map((d) => d.data() as Kit);
-      setState((s) => ({ ...s, kits }));
-      kitsLoaded = true;
-      checkDone();
-    });
-
-    const unsubMeta = onSnapshot(prefsDoc, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data() as { preferredShops?: Shop[] | string[] };
-        const raw = data.preferredShops ?? [];
-        let needsMigration = false;
-        const shops: Shop[] = raw.map((s) => {
-          if (typeof s === 'string') {
-            needsMigration = true;
-            const lower = s.toLowerCase();
-            const knownUrl =
-              lower.includes('jula') ? 'https://www.jula.no/' :
-              lower.includes('biltema') ? 'https://www.biltema.no/' :
-              lower.includes('clas') ? 'https://www.clasohlson.no/' :
-              lower.includes('byggmax') ? 'https://www.byggmax.no/' :
-              lower.includes('obs') ? 'https://www.obsbygg.no/' :
-              'https://';
-            return { id: generateId(), name: s, url: knownUrl };
-          }
-          return s;
-        });
-        const finalShops = shops.length > 0 ? shops : DEFAULT_SHOPS;
-        if (needsMigration || shops.length === 0) {
-          setDoc(prefsDoc, { preferredShops: finalShops });
-        }
-        setState((s) => ({ ...s, preferredShops: finalShops }));
-      } else {
-        setDoc(prefsDoc, { preferredShops: DEFAULT_SHOPS });
-        setState((s) => ({ ...s, preferredShops: DEFAULT_SHOPS }));
-      }
-      metaLoaded = true;
-      checkDone();
-    });
-
-    return () => {
-      unsubTools();
-      unsubKits();
-      unsubMeta();
-    };
+    return unsub;
   }, []);
 
+  // Engangs skrivemigrering til v2 når dataene er lastet.
+  useEffect(() => {
+    if (loading || migrationAttempted.current) return;
+    migrationAttempted.current = true;
+    runMigration(tools).catch((e) => {
+      console.error('Migrering til v2 feilet:', e);
+    });
+  }, [loading, tools]);
+
   const mapTool = useCallback((id: string, fn: (t: Tool) => Tool) => {
-    setState((s) => {
-      const newTools = s.tools.map((t) => {
+    setTools((tools) =>
+      tools.map((t) => {
         if (t.id !== id) return t;
         const updated = fn(t);
         setDoc(doc(toolsCol, updated.id), updated);
         return updated;
-      });
-      return { ...s, tools: newTools };
-    });
+      })
+    );
   }, []);
 
   const value: AppContextValue = {
-    state,
+    tools,
     loading,
     updateTool: (id, updates) => mapTool(id, (t) => ({ ...t, ...updates })),
-    addInventoryItem: (toolId, item) =>
-      mapTool(toolId, (t) => ({
-        ...t,
-        inventory: [...t.inventory, { ...item, id: generateId() }],
-      })),
-    updateInventoryItem: (toolId, itemId, updates) =>
-      mapTool(toolId, (t) => ({
-        ...t,
-        inventory: t.inventory.map((i) => (i.id === itemId ? { ...i, ...updates } : i)),
-      })),
-    removeInventoryItem: (toolId, itemId) =>
-      mapTool(toolId, (t) => ({
-        ...t,
-        inventory: t.inventory.filter((i) => i.id !== itemId),
-      })),
-    addCandidate: (toolId, candidate) =>
-      mapTool(toolId, (t) => ({
-        ...t,
-        candidates: [...t.candidates, { ...candidate, id: generateId() }],
-      })),
-    updateCandidate: (toolId, candidateId, updates) =>
-      mapTool(toolId, (t) => ({
-        ...t,
-        candidates: t.candidates.map((c) => (c.id === candidateId ? { ...c, ...updates } : c)),
-      })),
-    removeCandidate: (toolId, candidateId) =>
-      mapTool(toolId, (t) => ({
-        ...t,
-        candidates: t.candidates.filter((c) => c.id !== candidateId),
-        chosen:
-          t.chosen !== null && t.candidates[t.chosen]?.id === candidateId ? null : t.chosen,
-      })),
-    chooseCandidate: (toolId, index) => mapTool(toolId, (t) => ({ ...t, chosen: index })),
-    addKit: (kit) => {
-      const full: Kit = { ...kit, id: generateId() };
-      setState((s) => ({ ...s, kits: [...s.kits, full] }));
-      setDoc(doc(kitsCol, full.id), full);
-    },
-    updateKit: (kitId, updates) => {
-      setState((s) => ({
-        ...s,
-        kits: s.kits.map((k) => {
-          if (k.id !== kitId) return k;
-          const updated = { ...k, ...updates };
-          setDoc(doc(kitsCol, updated.id), updated);
-          return updated;
-        }),
-      }));
-    },
-    removeKit: (kitId) => {
-      setState((s) => ({ ...s, kits: s.kits.filter((k) => k.id !== kitId) }));
-      deleteDoc(doc(kitsCol, kitId));
-    },
-    addCustomTool: (name, category, type) => {
+    addTool: (name, category, type) => {
       const tool: Tool = {
         id: generateId(),
         name,
         category,
         type,
-        inventoryDone: false,
-        inventory: [],
-        candidates: [],
-        chosen: null,
+        counts: { osterliveien: 0, raschsvei: 0 },
+        needOverride: { osterliveien: null, raschsvei: null },
+        images: [],
         notes: '',
+        v: 2,
       };
-      setState((s) => ({ ...s, tools: [...s.tools, tool] }));
+      setTools((tools) => [...tools, tool]);
       setDoc(doc(toolsCol, tool.id), tool);
     },
-    addShop: (shop) => {
-      setState((s) => {
-        const shops = [...s.preferredShops, { ...shop, id: generateId() }];
-        setDoc(prefsDoc, { preferredShops: shops });
-        return { ...s, preferredShops: shops };
-      });
-    },
-    updateShop: (id, updates) => {
-      setState((s) => {
-        const shops = s.preferredShops.map((shop) => (shop.id === id ? { ...shop, ...updates } : shop));
-        setDoc(prefsDoc, { preferredShops: shops });
-        return { ...s, preferredShops: shops };
-      });
-    },
-    removeShop: (id) => {
-      setState((s) => {
-        const shops = s.preferredShops.filter((shop) => shop.id !== id);
-        setDoc(prefsDoc, { preferredShops: shops });
-        return { ...s, preferredShops: shops };
-      });
-    },
-    importSheetData: () => runSheetImport(toolsRef.current, true),
-    previewNonSheetTools: () => findToolsNotInSheet(toolsRef.current),
-    // Firestore's onSnapshot listener above picks up the deletions automatically.
-    cleanupNonSheetTools: () => cleanupNonSheetTools(toolsRef.current),
-    resetAll: async () => {
-      const batch = writeBatch(db);
-      state.tools.forEach((t) => batch.delete(doc(toolsCol, t.id)));
-      state.kits.forEach((k) => batch.delete(doc(kitsCol, k.id)));
-      await batch.commit();
-
-      const seedTools = generateSeedTools();
-      const batch2 = writeBatch(db);
-      seedTools.forEach((t) => batch2.set(doc(toolsCol, t.id), t));
-      batch2.set(prefsDoc, {
-        preferredShops: DEFAULT_SHOPS,
-      });
-      await batch2.commit();
+    deleteTool: (id) => {
+      setTools((tools) => tools.filter((t) => t.id !== id));
+      deleteDoc(doc(toolsCol, id));
     },
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-}
-
-export function useApp() {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be inside AppProvider');
-  return ctx;
 }

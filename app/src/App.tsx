@@ -1,12 +1,11 @@
-import { HashRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider, AppProvider, useAuth } from './store';
-import { HomeScreen } from './screens/HomeScreen';
-import { ToolDetailScreen } from './screens/ToolDetailScreen';
-import { DashboardScreen } from './screens/DashboardScreen';
-import { CaptureScreen } from './screens/CaptureScreen';
-import { KitLibraryScreen } from './screens/KitLibraryScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
-import { BottomNav } from './components/BottomNav';
+import { lazy, Suspense } from 'react';
+import { AuthProvider, AppProvider } from './store';
+import { useAuth } from './context';
+import { ToolListScreen } from './screens/ToolListScreen';
+
+// Kun for utvikling: ?preview rendrer appen med eksempeldata uten innlogging.
+// Grenen er død kode i produksjon og fjernes av bundleren.
+const PreviewApp = import.meta.env.DEV ? lazy(() => import('./preview')) : null;
 
 function LoginScreen() {
   const { signIn, authError, loading } = useAuth();
@@ -39,24 +38,20 @@ function AuthGate() {
 
   return (
     <AppProvider>
-      <HashRouter>
-        <div className="app-content">
-          <Routes>
-            <Route path="/" element={<HomeScreen />} />
-            <Route path="/tool/:id" element={<ToolDetailScreen />} />
-            <Route path="/capture/:toolId/:mode" element={<CaptureScreen />} />
-            <Route path="/dashboard" element={<DashboardScreen />} />
-            <Route path="/kits" element={<KitLibraryScreen />} />
-            <Route path="/settings" element={<SettingsScreen />} />
-          </Routes>
-        </div>
-        <BottomNav />
-      </HashRouter>
+      <ToolListScreen />
     </AppProvider>
   );
 }
 
 function App() {
+  if (PreviewApp && new URLSearchParams(window.location.search).has('preview')) {
+    return (
+      <Suspense fallback={null}>
+        <PreviewApp />
+      </Suspense>
+    );
+  }
+
   return (
     <AuthProvider>
       <AuthGate />

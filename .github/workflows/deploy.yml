@@ -35,10 +35,6 @@ jobs:
       - name: Build
         run: npm run build
         working-directory: app
-        env:
-          VITE_GOOGLE_CSE_API_KEY: ${{ secrets.VITE_GOOGLE_CSE_API_KEY }}
-          VITE_GOOGLE_CSE_CX: ${{ secrets.VITE_GOOGLE_CSE_CX }}
-          VITE_IMAGE_SEARCH_PROXY_URL: ${{ vars.VITE_IMAGE_SEARCH_PROXY_URL }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

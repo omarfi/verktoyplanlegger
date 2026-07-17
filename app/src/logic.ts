@@ -1,102 +1,39 @@
-import type { Tool, ToolStatus, GapResult } from './types';
+import type { Tool, House } from './types';
 
-export function calculateGaps(tool: Tool): GapResult {
-  const atMine = tool.inventory.some((i) => i.location === 'mine');
-  const atParents = tool.inventory.some((i) => i.location === 'parents');
+export const HOUSES: House[] = ['osterliveien', 'raschsvei'];
 
-  if (tool.type === 'basic') {
-    const needsBuy: string[] = [];
-    if (!atMine) needsBuy.push('mine');
-    if (!atParents) needsBuy.push('parents');
-    return {
-      mine: atMine,
-      parents: atParents,
-      needsBuy: tool.chosen !== null ? [] : needsBuy,
-      needsMove: null,
-    };
-  }
-
-  // advanced
-  if (atMine) {
-    return { mine: true, parents: null, needsBuy: [], needsMove: null };
-  }
-  if (atParents && !atMine) {
-    return { mine: false, parents: true, needsBuy: [], needsMove: 'parents-to-mine' };
-  }
-  if (tool.inventory.length > 0) {
-    return { mine: true, parents: null, needsBuy: [], needsMove: null };
-  }
-  return {
-    mine: false,
-    parents: null,
-    needsBuy: tool.chosen !== null ? [] : ['mine'],
-    needsMove: null,
-  };
+export function houseLabel(house: House): string {
+  return house === 'osterliveien' ? 'Østerliveien' : 'Raschs Vei';
 }
 
-export function getStatus(tool: Tool): ToolStatus {
-  if (!tool.inventoryDone) return 'new';
-
-  const gaps = calculateGaps(tool);
-
-  if (tool.type === 'advanced' && gaps.needsMove) {
-    if (tool.chosen !== null) return 'done';
-    return 'move';
-  }
-
-  if (gaps.needsBuy.length === 0) return 'done';
-  if (tool.chosen !== null) return 'done';
-  if (tool.candidates.length > 0) return 'shopping';
-  return 'gap';
+/**
+ * Utledet behov: Raschs Vei trenger 1 når beholdningen er 0 (begge typer);
+ * Østerliveien trenger 1 kun for basisverktøy (avansert skal bare finnes
+ * på Raschs Vei).
+ */
+export function derivedNeed(tool: Tool, house: House): number {
+  if (house === 'osterliveien' && tool.type === 'avansert') return 0;
+  return tool.counts[house] === 0 ? 1 : 0;
 }
 
-export function getStatusLabel(status: ToolStatus): string {
-  const map: Record<ToolStatus, string> = {
-    new: 'Ny',
-    gap: 'Mangler',
-    shopping: 'Handler',
-    done: 'Ferdig',
-    move: 'Flyttes',
-  };
-  return map[status];
+export function effectiveNeed(tool: Tool, house: House): number {
+  return tool.needOverride[house] ?? derivedNeed(tool, house);
 }
 
-export function getStatusColor(status: ToolStatus): { bg: string; text: string } {
-  const map: Record<ToolStatus, { bg: string; text: string }> = {
-    new: { bg: 'rgb(241,239,232)', text: 'rgb(95,94,90)' },
-    gap: { bg: 'rgb(250,236,231)', text: 'rgb(113,43,19)' },
-    shopping: { bg: 'rgb(230,241,251)', text: 'rgb(12,68,124)' },
-    done: { bg: 'rgb(234,243,222)', text: 'rgb(39,80,10)' },
-    move: { bg: 'rgb(250,238,218)', text: 'rgb(99,56,6)' },
-  };
-  return map[status];
+export type HouseFilter = 'begge' | House;
+export type StatusFilter = 'alle' | 'mangler' | 'har';
+
+export interface Filter {
+  house: HouseFilter;
+  status: StatusFilter;
 }
 
-export function detectShop(url: string): string | null {
-  if (!url) return null;
-  const lower = url.toLowerCase();
-  if (lower.includes('jula.no')) return 'Jula';
-  if (lower.includes('biltema.no')) return 'Biltema';
-  if (lower.includes('clasohlson.no') || lower.includes('clas-ohlson.no')) return 'Clas Ohlson';
-  if (lower.includes('byggmax.no')) return 'Byggmax';
-  if (lower.includes('obsbygg.no') || lower.includes('obs.no')) return 'Obs Bygg';
-  return null;
-}
-
-export function locationLabel(loc: string): string {
-  switch (loc) {
-    case 'mine': return 'Raschs Vei';
-    case 'parents': return 'Østerliveien';
-    default: return 'Ukjent';
-  }
-}
-
-export function locationClass(loc: string): string {
-  switch (loc) {
-    case 'mine': return 'location-mine';
-    case 'parents': return 'location-parents';
-    default: return 'location-unknown';
-  }
+export function matchesFilter(tool: Tool, filter: Filter): boolean {
+  if (filter.status === 'alle') return true;
+  const houses = filter.house === 'begge' ? HOUSES : [filter.house];
+  return filter.status === 'mangler'
+    ? houses.every((h) => tool.counts[h] === 0)
+    : houses.every((h) => tool.counts[h] > 0);
 }
 
 export function generateId(): string {
