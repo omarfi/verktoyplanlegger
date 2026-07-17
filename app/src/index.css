@@ -564,7 +564,7 @@ body {
   padding: 24px; max-width: 320px; width: 100%;
 }
 .confirm-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-.confirm-text { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+.confirm-text { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; white-space: pre-line; max-height: 40vh; overflow-y: auto; }
 .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* Notes */

@@ -5,7 +5,7 @@ import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
 import { generateSeedTools } from './seedData';
-import { runSheetImport, type SheetImportResult } from './sheetImport';
+import { runSheetImport, cleanupNonSheetTools, findToolsNotInSheet, type SheetImportResult, type CleanupResult } from './sheetImport';
 import { generateId } from './logic';
 
 const ALLOWED_EMAIL = 'omar1490@gmail.com';
@@ -102,6 +102,8 @@ interface AppContextValue {
   updateShop: (id: string, updates: Partial<Omit<Shop, 'id'>>) => void;
   removeShop: (id: string) => void;
   importSheetData: () => Promise<SheetImportResult | null>;
+  previewNonSheetTools: () => Tool[];
+  cleanupNonSheetTools: () => Promise<CleanupResult>;
   resetAll: () => void;
 }
 
@@ -295,6 +297,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     },
     importSheetData: () => runSheetImport(toolsRef.current, true),
+    previewNonSheetTools: () => findToolsNotInSheet(toolsRef.current),
+    // Firestore's onSnapshot listener above picks up the deletions automatically.
+    cleanupNonSheetTools: () => cleanupNonSheetTools(toolsRef.current),
     resetAll: async () => {
       const batch = writeBatch(db);
       state.tools.forEach((t) => batch.delete(doc(toolsCol, t.id)));

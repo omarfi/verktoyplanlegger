@@ -4,12 +4,15 @@ import { useApp, useAuth } from '../store';
 import { ConfirmDialog } from '../components/Modal';
 
 export function SettingsScreen() {
-  const { state, resetAll, addShop, updateShop, removeShop, importSheetData } = useApp();
+  const { state, resetAll, addShop, updateShop, removeShop, importSheetData, previewNonSheetTools, cleanupNonSheetTools } = useApp();
   const { logOut } = useAuth();
   const navigate = useNavigate();
   const [showReset, setShowReset] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [showCleanup, setShowCleanup] = useState(false);
+  const [cleaningUp, setCleaningUp] = useState(false);
+  const nonSheetTools = previewNonSheetTools();
   const [newShop, setNewShop] = useState('');
   const [newShopUrl, setNewShopUrl] = useState('https://');
   const [editingShopId, setEditingShopId] = useState<string | null>(null);
@@ -105,6 +108,19 @@ export function SettingsScreen() {
         <span className="chevron">&#8635;</span>
       </div>
 
+      <div
+        className="settings-row"
+        style={{ color: nonSheetTools.length > 0 ? 'var(--danger, #C0392B)' : undefined, opacity: cleaningUp ? 0.6 : 1 }}
+        onClick={() => !cleaningUp && nonSheetTools.length > 0 && setShowCleanup(true)}
+      >
+        <span>
+          {cleaningUp
+            ? 'Fjerner...'
+            : `Fjern verktøy utenfor regnearket (${nonSheetTools.length})`}
+        </span>
+        <span className="chevron">&times;</span>
+      </div>
+
       {/* Shop management */}
       <div className="section">
         <div className="section-title">Butikker</div>
@@ -181,6 +197,31 @@ export function SettingsScreen() {
           }
         }}
         onCancel={() => setShowImport(false)}
+      />
+
+      <ConfirmDialog
+        open={showCleanup}
+        title={`Fjern ${nonSheetTools.length} verktøy?`}
+        message={
+          `Disse verktøyene finnes ikke i verktoyoversikt-regnearket og slettes permanent, ` +
+          `inkludert eventuell beholdning, kandidater og notater:\n\n` +
+          nonSheetTools.map((t) => `• ${t.name} (${t.category})`).join('\n') +
+          `\n\nDenne handlingen kan ikke angres.`
+        }
+        confirmLabel="Fjern"
+        onConfirm={async () => {
+          setShowCleanup(false);
+          setCleaningUp(true);
+          try {
+            const result = await cleanupNonSheetTools();
+            alert(`${result.removed} verktøy fjernet.`);
+          } catch {
+            alert('Oppryddingen feilet. Prøv igjen.');
+          } finally {
+            setCleaningUp(false);
+          }
+        }}
+        onCancel={() => setShowCleanup(false)}
       />
 
       <ConfirmDialog

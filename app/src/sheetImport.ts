@@ -101,6 +101,41 @@ export interface SheetImportResult {
   created: number;
 }
 
+// Navn (og alias-mål) for alt som finnes i regnearket. Brukes til å finne
+// verktøy i databasen som IKKE stammer fra regnearket.
+function buildSheetNameSet(): Set<string> {
+  const keep = new Set<string>();
+  for (const row of mergeRows()) keep.add(normalize(row.name));
+  for (const alias of Object.values(NAME_ALIASES)) keep.add(alias);
+  return keep;
+}
+
+export function findToolsNotInSheet(existingTools: Tool[]): Tool[] {
+  const keep = buildSheetNameSet();
+  return existingTools.filter((t) => !keep.has(normalize(t.name)));
+}
+
+export interface CleanupResult {
+  removed: number;
+  removedNames: string[];
+}
+
+/**
+ * Sletter permanent alle verktøy i databasen som ikke finnes i
+ * verktoyoversikt-regnearket (basert på navn/alias). Engangsopprydding —
+ * kalles kun manuelt fra Innstillinger, aldri automatisk.
+ */
+export async function cleanupNonSheetTools(existingTools: Tool[]): Promise<CleanupResult> {
+  const toRemove = findToolsNotInSheet(existingTools);
+  if (toRemove.length === 0) return { removed: 0, removedNames: [] };
+
+  const batch = writeBatch(db);
+  for (const t of toRemove) batch.delete(doc(db, 'tools', t.id));
+  await batch.commit();
+
+  return { removed: toRemove.length, removedNames: toRemove.map((t) => t.name) };
+}
+
 /**
  * Skriver dataene fra verktoyoversikt-regnearket inn i Firestore.
  * Kjøres automatisk én gang (styrt av meta/sheetImport-dokumentet);
