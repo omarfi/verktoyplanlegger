@@ -6,6 +6,7 @@ const HOUSE_OPTIONS: HouseFilter[] = ['begge', 'osterliveien', 'raschsvei'];
 const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: 'alle', label: 'Alle' },
   { key: 'mangler', label: 'Mangler' },
+  { key: 'trenger', label: 'Trenger' },
   { key: 'har', label: 'Har' },
 ];
 

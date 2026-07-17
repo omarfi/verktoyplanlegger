@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import type { Tool, House, ToolType } from '../types';
+import type { Tool, ToolInstance, House, ToolType } from '../types';
 import { useApp } from '../context';
-import { HOUSES, derivedNeed, houseLabel } from '../logic';
+import { HOUSES, countAt, derivedNeed, houseLabel, generateId } from '../logic';
 import { HouseBadge } from './HouseBadge';
 import { ConfirmDialog } from './Modal';
 
@@ -15,7 +15,6 @@ export function EditToolSheet({ tool, categories, onClose }: EditToolSheetProps)
   const { updateTool, deleteTool } = useApp();
   const [name, setName] = useState(tool.name);
   const [newCategory, setNewCategory] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const commitName = () => {
@@ -24,26 +23,24 @@ export function EditToolSheet({ tool, categories, onClose }: EditToolSheetProps)
     else setName(tool.name);
   };
 
-  const setCount = (house: House, delta: number) => {
-    const next = Math.max(0, tool.counts[house] + delta);
-    updateTool(tool.id, { counts: { ...tool.counts, [house]: next } });
+  const setType = (type: ToolType) => updateTool(tool.id, { type });
+
+  const updateInstances = (instances: ToolInstance[]) => updateTool(tool.id, { instances });
+
+  const addInstance = () => {
+    updateInstances([...tool.instances, { id: generateId(), location: 'raschsvei', image: '', label: '' }]);
+  };
+
+  const patchInstance = (id: string, patch: Partial<ToolInstance>) => {
+    updateInstances(tool.instances.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  };
+
+  const removeInstance = (id: string) => {
+    updateInstances(tool.instances.filter((i) => i.id !== id));
   };
 
   const setOverride = (house: House, value: number | null) => {
     updateTool(tool.id, { needOverride: { ...tool.needOverride, [house]: value } });
-  };
-
-  const setType = (type: ToolType) => updateTool(tool.id, { type });
-
-  const removeImage = (index: number) => {
-    updateTool(tool.id, { images: tool.images.filter((_, i) => i !== index) });
-  };
-
-  const addImage = () => {
-    const url = imageUrl.trim();
-    if (!url) return;
-    updateTool(tool.id, { images: [...tool.images, url] });
-    setImageUrl('');
   };
 
   return (
@@ -117,69 +114,83 @@ export function EditToolSheet({ tool, categories, onClose }: EditToolSheetProps)
           </div>
         </div>
 
-        {HOUSES.map((house) => {
-          const auto = derivedNeed(tool, house);
-          const override = tool.needOverride[house];
-          return (
-            <div className="house-edit-row" key={house}>
-              <div className="house-edit-label">
-                <HouseBadge house={house} size={28} />
-                <span>{houseLabel(house)}</span>
+        <div className="form-group">
+          <label className="form-label">
+            Eksemplarer ({HOUSES.map((h) => `${houseLabel(h)}: ${countAt(tool, h)}`).join(' · ')})
+          </label>
+          {tool.instances.length === 0 && (
+            <p className="hint-text">Ingen eksemplarer registrert ennå.</p>
+          )}
+          {tool.instances.map((inst) => (
+            <div className="instance-row" key={inst.id}>
+              <div className="instance-thumb">
+                {inst.image ? (
+                  <img src={inst.image} alt="" referrerPolicy="no-referrer" />
+                ) : (
+                  <span className="instance-thumb-empty">?</span>
+                )}
               </div>
-              <div className="house-edit-controls">
-                <div className="stepper-block">
-                  <span className="stepper-label">Beholdning</span>
-                  <div className="stepper">
-                    <button onClick={() => setCount(house, -1)} disabled={tool.counts[house] === 0}>−</button>
-                    <span className="stepper-value">{tool.counts[house]}</span>
-                    <button onClick={() => setCount(house, 1)}>+</button>
-                  </div>
-                </div>
-                <div className="stepper-block">
-                  <span className="stepper-label">Behov</span>
-                  {override === null ? (
-                    <div className="need-auto">
-                      <span className="need-auto-value">{auto} <em>(auto)</em></span>
-                      <button className="btn-link" onClick={() => setOverride(house, auto)}>Overstyr</button>
-                    </div>
-                  ) : (
-                    <div className="stepper overridden">
-                      <button onClick={() => setOverride(house, Math.max(0, override - 1))} disabled={override === 0}>−</button>
-                      <span className="stepper-value">{override}</span>
-                      <button onClick={() => setOverride(house, override + 1)}>+</button>
-                      <button className="btn-link" onClick={() => setOverride(house, null)}>Auto</button>
-                    </div>
-                  )}
+              <div className="instance-fields">
+                <input
+                  className="form-input"
+                  value={inst.label}
+                  onChange={(e) => patchInstance(inst.id, { label: e.target.value })}
+                  placeholder="Merke / variant (valgfritt)"
+                />
+                <input
+                  className="form-input"
+                  value={inst.image}
+                  onChange={(e) => patchInstance(inst.id, { image: e.target.value })}
+                  placeholder="Bilde-URL"
+                />
+                <div className="segmented instance-location">
+                  {HOUSES.map((house) => (
+                    <button
+                      key={house}
+                      className={`segment ${inst.location === house ? 'active' : ''}`}
+                      onClick={() => patchInstance(inst.id, { location: house })}
+                    >
+                      <HouseBadge house={house} size={16} />
+                      {houseLabel(house)}
+                    </button>
+                  ))}
                 </div>
               </div>
+              <button className="instance-remove" onClick={() => removeInstance(inst.id)} aria-label="Fjern eksemplar">×</button>
             </div>
-          );
-        })}
+          ))}
+          <button className="btn btn-ghost btn-full add-instance-btn" onClick={addInstance}>
+            + Legg til eksemplar
+          </button>
+        </div>
 
         <div className="form-group">
-          <label className="form-label">Bilder</label>
-          {tool.images.length > 0 && (
-            <div className="image-list">
-              {tool.images.map((src, i) => (
-                <div className="image-item" key={`${src}-${i}`}>
-                  <img src={src} alt="" />
-                  <button className="image-remove" onClick={() => removeImage(i)} aria-label="Fjern bilde">×</button>
+          <label className="form-label">Behov</label>
+          {HOUSES.map((house) => {
+            const auto = derivedNeed(tool, house);
+            const override = tool.needOverride[house];
+            return (
+              <div className="need-row" key={house}>
+                <div className="need-row-label">
+                  <HouseBadge house={house} size={24} />
+                  <span>{houseLabel(house)}</span>
                 </div>
-              ))}
-            </div>
-          )}
-          <div className="inline-row">
-            <input
-              className="form-input"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addImage()}
-              placeholder="Lim inn bilde-URL"
-            />
-            <button className="btn btn-primary" onClick={addImage} disabled={!imageUrl.trim()}>
-              Legg til
-            </button>
-          </div>
+                {override === null ? (
+                  <div className="need-auto">
+                    <span className="need-auto-value">{auto} <em>(auto)</em></span>
+                    <button className="btn-link" onClick={() => setOverride(house, auto)}>Overstyr</button>
+                  </div>
+                ) : (
+                  <div className="stepper overridden">
+                    <button onClick={() => setOverride(house, Math.max(0, override - 1))} disabled={override === 0}>−</button>
+                    <span className="stepper-value">{override}</span>
+                    <button onClick={() => setOverride(house, override + 1)}>+</button>
+                    <button className="btn-link" onClick={() => setOverride(house, null)}>Auto</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <button className="btn btn-danger btn-full" onClick={() => setConfirmDelete(true)}>

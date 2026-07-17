@@ -1,20 +1,25 @@
 import { useMemo, useState } from 'react';
 import { useApp, useAuth } from '../context';
-import { matchesFilter, type Filter } from '../logic';
+import { matchesFilter, toolMatchesSearch, type Filter } from '../logic';
 import { CATEGORY_ORDER } from '../categories';
 import type { Tool } from '../types';
 import { ToolCard } from '../components/ToolCard';
 import { FilterBar } from '../components/FilterBar';
 import { EditToolSheet } from '../components/EditToolSheet';
 import { AddToolModal } from '../components/AddToolModal';
+import { MergeDialog } from '../components/MergeDialog';
 
 export function ToolListScreen() {
-  const { tools, loading } = useApp();
+  const { tools, loading, mergeTools } = useApp();
   const { logOut } = useAuth();
   const [filter, setFilter] = useState<Filter>({ house: 'begge', status: 'alle' });
+  const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showAddTool, setShowAddTool] = useState(false);
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showMerge, setShowMerge] = useState(false);
 
   const allCategories = useMemo(() => {
     const cats = new Set(CATEGORY_ORDER);
@@ -22,7 +27,10 @@ export function ToolListScreen() {
     return [...cats];
   }, [tools]);
 
-  const filtered = useMemo(() => tools.filter((t) => matchesFilter(t, filter)), [tools, filter]);
+  const filtered = useMemo(
+    () => tools.filter((t) => matchesFilter(t, filter) && toolMatchesSearch(t, search)),
+    [tools, filter, search]
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<string, Tool[]>();
@@ -41,9 +49,31 @@ export function ToolListScreen() {
   }, [filtered]);
 
   const selectedTool = selectedToolId ? tools.find((t) => t.id === selectedToolId) ?? null : null;
+  const selectedTools = useMemo(
+    () => tools.filter((t) => selectedIds.has(t.id)),
+    [tools, selectedIds]
+  );
 
   const toggleCategory = (cat: string) => {
     setCollapsed((c) => ({ ...c, [cat]: !c[cat] }));
+  };
+
+  const handleCardClick = (tool: Tool) => {
+    if (selectMode) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(tool.id)) next.delete(tool.id);
+        else next.add(tool.id);
+        return next;
+      });
+    } else {
+      setSelectedToolId(tool.id);
+    }
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
   };
 
   return (
@@ -56,9 +86,27 @@ export function ToolListScreen() {
               {loading ? 'Laster...' : `${filtered.length} av ${tools.length} verktøy`}
             </div>
           </div>
-          <button className="btn btn-ghost btn-small" onClick={logOut}>Logg ut</button>
+          <div className="header-actions">
+            <button
+              className={`btn btn-ghost btn-small ${selectMode ? 'active-ghost' : ''}`}
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            >
+              {selectMode ? 'Avbryt' : 'Velg'}
+            </button>
+            <button className="btn btn-ghost btn-small" onClick={logOut}>Logg ut</button>
+          </div>
         </div>
-        <FilterBar filter={filter} onChange={setFilter} tools={tools} />
+        <div className="toolbar">
+          <input
+            className="search-input"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søk verktøy…"
+            aria-label="Søk"
+          />
+          <FilterBar filter={filter} onChange={setFilter} tools={tools} />
+        </div>
       </div>
 
       {grouped.map(([category, catTools]) => (
@@ -73,7 +121,13 @@ export function ToolListScreen() {
           {!collapsed[category] && (
             <div className="tool-grid">
               {catTools.map((tool) => (
-                <ToolCard key={tool.id} tool={tool} onClick={() => setSelectedToolId(tool.id)} />
+                <ToolCard
+                  key={tool.id}
+                  tool={tool}
+                  onClick={() => handleCardClick(tool)}
+                  selectMode={selectMode}
+                  selected={selectedIds.has(tool.id)}
+                />
               ))}
             </div>
           )}
@@ -83,13 +137,42 @@ export function ToolListScreen() {
       {!loading && grouped.length === 0 && (
         <div className="empty-state">
           <div className="empty-state-icon">&#128295;</div>
-          <div className="empty-state-text">Ingen verktøy matcher filteret</div>
+          <div className="empty-state-text">Ingen verktøy matcher søket</div>
         </div>
       )}
 
-      <button className="add-tool-fab" onClick={() => setShowAddTool(true)} aria-label="Legg til verktøy">+</button>
+      {!selectMode && (
+        <button className="add-tool-fab" onClick={() => setShowAddTool(true)} aria-label="Legg til verktøy">+</button>
+      )}
+
+      {selectMode && (
+        <div className="select-bar">
+          <span className="select-bar-count">{selectedIds.size} valgt</span>
+          <button
+            className="btn btn-primary"
+            disabled={selectedIds.size < 2}
+            onClick={() => setShowMerge(true)}
+          >
+            Slå sammen
+          </button>
+        </div>
+      )}
 
       <AddToolModal open={showAddTool} categories={allCategories} onClose={() => setShowAddTool(false)} />
+
+      {showMerge && (
+        <MergeDialog
+          open
+          tools={selectedTools}
+          categories={allCategories}
+          onClose={() => setShowMerge(false)}
+          onConfirm={(meta) => {
+            mergeTools([...selectedIds], meta);
+            setShowMerge(false);
+            exitSelectMode();
+          }}
+        />
+      )}
 
       {selectedTool && (
         <EditToolSheet

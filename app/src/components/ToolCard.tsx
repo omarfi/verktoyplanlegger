@@ -1,9 +1,9 @@
 import type { Tool, House } from '../types';
-import { HOUSES, effectiveNeed, houseLabel } from '../logic';
+import { HOUSES, countAt, effectiveNeed, houseLabel } from '../logic';
 import { HouseBadge } from './HouseBadge';
 
 function HouseStatus({ tool, house }: { tool: Tool; house: House }) {
-  const count = tool.counts[house];
+  const count = countAt(tool, house);
   const need = effectiveNeed(tool, house);
   const overridden = tool.needOverride[house] !== null;
 
@@ -30,16 +30,27 @@ function HouseStatus({ tool, house }: { tool: Tool; house: House }) {
   );
 }
 
-export function ToolCard({ tool, onClick }: { tool: Tool; onClick: () => void }) {
-  const [primary, ...rest] = tool.images;
+interface ToolCardProps {
+  tool: Tool;
+  onClick: () => void;
+  selectMode?: boolean;
+  selected?: boolean;
+}
+
+export function ToolCard({ tool, onClick, selectMode = false, selected = false }: ToolCardProps) {
+  const withImage = tool.instances.filter((i) => i.image);
+  const [primary, ...rest] = withImage;
   const miniThumbs = rest.slice(0, 2);
   const extraCount = rest.length - miniThumbs.length;
 
   return (
-    <div className="tool-card" onClick={onClick}>
+    <div
+      className={`tool-card ${selectMode ? 'selectable' : ''} ${selected ? 'selected' : ''}`}
+      onClick={onClick}
+    >
       <div className="tool-card-image">
         {primary ? (
-          <img src={primary} alt={tool.name} loading="lazy" />
+          <img src={primary.image} alt={tool.name} loading="lazy" referrerPolicy="no-referrer" />
         ) : (
           <div className="tool-card-placeholder" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="36" height="36">
@@ -55,10 +66,11 @@ export function ToolCard({ tool, onClick }: { tool: Tool; onClick: () => void })
           </div>
         )}
         {tool.type === 'avansert' && <span className="tool-type-tag">Avansert</span>}
+        {selectMode && <span className={`select-check ${selected ? 'on' : ''}`}>{selected ? '✓' : ''}</span>}
         {miniThumbs.length > 0 && (
           <div className="thumb-stack">
-            {miniThumbs.map((src, i) => (
-              <img key={i} src={src} alt="" loading="lazy" />
+            {miniThumbs.map((inst) => (
+              <img key={inst.id} src={inst.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
             ))}
             {extraCount > 0 && <span className="thumb-more">+{extraCount}</span>}
           </div>

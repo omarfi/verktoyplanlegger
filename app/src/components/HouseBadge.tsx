@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { House } from '../types';
 import { houseLabel } from '../logic';
+import { useApp } from '../context';
 
-// Legg ekte bilder i app/public/avatars/ med disse filnavnene, så vises de
-// automatisk i stedet for initial-sirklene.
-const AVATAR_SRC: Record<House, string> = {
+// Fallback-fil i app/public/avatars/ dersom ingen Google-avatar er fanget ennå.
+const AVATAR_FILE: Record<House, string> = {
   osterliveien: `${import.meta.env.BASE_URL}avatars/pappa.jpg`,
   raschsvei: `${import.meta.env.BASE_URL}avatars/omar.jpg`,
 };
@@ -15,7 +15,11 @@ const INITIALS: Record<House, string> = {
 };
 
 export function HouseBadge({ house, size = 20 }: { house: House; size?: number }) {
+  const { avatars } = useApp();
   const [failed, setFailed] = useState(false);
+
+  // Prioritet: fanget Google-avatar → fil i public/avatars/ → farget initial.
+  const src = avatars[house] || AVATAR_FILE[house];
 
   if (failed) {
     return (
@@ -34,10 +38,11 @@ export function HouseBadge({ house, size = 20 }: { house: House; size?: number }
     <img
       className={`house-badge house-badge-${house}`}
       style={{ width: size, height: size }}
-      src={AVATAR_SRC[house]}
+      src={src}
       alt={houseLabel(house)}
       title={houseLabel(house)}
       onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
     />
   );
 }

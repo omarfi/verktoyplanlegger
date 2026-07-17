@@ -2,18 +2,24 @@ export type House = 'osterliveien' | 'raschsvei';
 
 export type ToolType = 'basis' | 'avansert';
 
+/** Ett fysisk eksemplar av et verktøy, med egen lokasjon og thumbnail. */
+export interface ToolInstance {
+  id: string;
+  location: House;
+  image: string;   // thumbnail-URL, kan være ''
+  label: string;   // valgfritt merke/variant, f.eks. 'Bahco', kan være ''
+}
+
 export interface Tool {
   id: string;
   name: string;
   category: string;
   type: ToolType;
-  /** Beholdning per hus. */
-  counts: Record<House, number>;
+  /** Alle fysiske eksemplarer; beholdning per hus utledes ved å telle disse. */
+  instances: ToolInstance[];
   /** Manuell overstyring av behov; null = automatisk utledet. */
   needOverride: Record<House, number | null>;
-  /** Miniatyrbilder (URL-er), ett per fysisk eksemplar der det finnes. */
-  images: string[];
   notes: string;
   /** Skjemaversjon for Firestore-dokumentet. */
-  v: 2;
+  v: 3;
 }
