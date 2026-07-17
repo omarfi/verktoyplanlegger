@@ -25,10 +25,11 @@ function sample(partial: Partial<Tool> & Pick<Tool, 'name' | 'category'>): Tool 
   return {
     id: generateId(),
     type: 'basis',
+    image: '',
     instances: [],
     needOverride: { osterliveien: null, raschsvei: null },
     notes: '',
-    v: 3,
+    v: 4,
     ...partial,
   };
 }
@@ -36,7 +37,8 @@ function sample(partial: Partial<Tool> & Pick<Tool, 'name' | 'category'>): Tool 
 const SAMPLE_TOOLS: Tool[] = [
   sample({ name: 'Hammer', category: 'Slagverktøy', instances: [inst('osterliveien', svgThumb('Hammer', '#8e6e53')), inst('raschsvei', svgThumb('Hammer', '#8e6e53'))] }),
   sample({ name: 'Skiftenøkkel', category: 'Nøkler', instances: [inst('osterliveien', svgThumb('Cocraft', '#456990'), 'Cocraft'), inst('osterliveien', svgThumb('Bahco', '#028090'), 'Bahco'), inst('raschsvei', svgThumb('Bahco', '#114b5f'), 'Bahco')] }),
-  sample({ name: 'Momentnøkkel', category: 'Nøkler', type: 'avansert', instances: [] }),
+  // Generell thumbnail, men ingen eksemplarer disponert noe sted.
+  sample({ name: 'Momentnøkkel', category: 'Nøkler', type: 'avansert', image: svgThumb('Moment', '#6b4e71'), instances: [] }),
   sample({ name: 'Laservater', category: 'Måleverktøy', type: 'avansert', instances: [inst('raschsvei', svgThumb('Laser', '#c05746'))] }),
   sample({ name: 'Tommestokk', category: 'Måleverktøy', instances: [inst('osterliveien', svgThumb('Tommestokk', '#f18f01'))] }),
   sample({ name: 'Målebånd IKEA', category: 'Måleverktøy', instances: [inst('raschsvei', svgThumb('IKEA', '#f6a21e'))] }),

@@ -15,11 +15,13 @@ export interface Tool {
   name: string;
   category: string;
   type: ToolType;
-  /** Alle fysiske eksemplarer; beholdning per hus utledes ved å telle disse. */
+  /** Generell thumbnail for verktøyet, uavhengig av om man disponerer noe. */
+  image: string;
+  /** Fysiske eksemplarer man faktisk disponerer; beholdning per hus telles fra disse. */
   instances: ToolInstance[];
   /** Manuell overstyring av behov; null = automatisk utledet. */
   needOverride: Record<House, number | null>;
   notes: string;
   /** Skjemaversjon for Firestore-dokumentet. */
-  v: 3;
+  v: 4;
 }

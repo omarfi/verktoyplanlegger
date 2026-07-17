@@ -132,10 +132,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         name,
         category,
         type,
+        image: '',
         instances: [],
         needOverride: { osterliveien: null, raschsvei: null },
         notes: '',
-        v: 3,
+        v: 4,
       };
       setTools((tools) => [...tools, tool]);
       setDoc(doc(toolsCol, tool.id), tool);

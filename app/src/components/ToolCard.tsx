@@ -38,8 +38,10 @@ interface ToolCardProps {
 }
 
 export function ToolCard({ tool, onClick, selectMode = false, selected = false }: ToolCardProps) {
-  const withImage = tool.instances.filter((i) => i.image);
-  const [primary, ...rest] = withImage;
+  // Vis eksemplarenes bilder når de finnes; ellers verktøyets generelle thumbnail.
+  const instanceImages = tool.instances.map((i) => i.image).filter(Boolean);
+  const gallery = instanceImages.length ? instanceImages : tool.image ? [tool.image] : [];
+  const [primary, ...rest] = gallery;
   const miniThumbs = rest.slice(0, 2);
   const extraCount = rest.length - miniThumbs.length;
 
@@ -50,7 +52,7 @@ export function ToolCard({ tool, onClick, selectMode = false, selected = false }
     >
       <div className="tool-card-image">
         {primary ? (
-          <img src={primary.image} alt={tool.name} loading="lazy" referrerPolicy="no-referrer" />
+          <img src={primary} alt={tool.name} loading="lazy" referrerPolicy="no-referrer" />
         ) : (
           <div className="tool-card-placeholder" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="36" height="36">
@@ -69,8 +71,8 @@ export function ToolCard({ tool, onClick, selectMode = false, selected = false }
         {selectMode && <span className={`select-check ${selected ? 'on' : ''}`}>{selected ? '✓' : ''}</span>}
         {miniThumbs.length > 0 && (
           <div className="thumb-stack">
-            {miniThumbs.map((inst) => (
-              <img key={inst.id} src={inst.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+            {miniThumbs.map((src, i) => (
+              <img key={i} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
             ))}
             {extraCount > 0 && <span className="thumb-more">+{extraCount}</span>}
           </div>

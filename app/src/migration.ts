@@ -3,7 +3,7 @@ import { db } from './firebase';
 import type { Tool, ToolInstance, House } from './types';
 import { generateId } from './logic';
 
-const MIGRATION_VERSION = 3;
+const MIGRATION_VERSION = 4;
 const migrationDoc = doc(db, 'meta', 'migration');
 
 interface LegacyInventoryItem {
@@ -26,14 +26,27 @@ function instance(location: House, image = '', label = ''): ToolInstance {
   return { id: generateId(), location, image, label };
 }
 
+function normalizeInstances(arr: unknown[]): ToolInstance[] {
+  return (arr as ToolInstance[]).map((i) => ({
+    id: i.id || generateId(),
+    location: i.location === 'osterliveien' ? 'osterliveien' : 'raschsvei',
+    image: i.image ?? '',
+    label: i.label ?? '',
+  }));
+}
+
 function normalizeType(raw: unknown): Tool['type'] {
   return raw === 'advanced' || raw === 'avansert' ? 'avansert' : 'basis';
 }
 
 /**
- * Mapper et Firestore-dokument (v1, v2 eller v3) til v3-modellen.
- * Brukes både i onSnapshot (så UI-et alltid ser v3-formen) og i den
+ * Mapper et Firestore-dokument (v1, v2, v3 eller v4) til v4-modellen.
+ * Brukes både i onSnapshot (så UI-et alltid ser v4-formen) og i den
  * engangs skrivemigreringen.
+ *
+ * Viktig: et bilde betyr IKKE at man disponerer et eksemplar. Eksemplarer
+ * lages kun fra faktiske beholdningstall/inventar; øvrige bilder legges som
+ * generell thumbnail på verktøyet.
  */
 export function migrateTool(raw: Record<string, unknown>): Tool {
   const base = {
@@ -46,23 +59,29 @@ export function migrateTool(raw: Record<string, unknown>): Tool {
       osterliveien: (raw.needOverride as Record<string, number | null>)?.osterliveien ?? null,
       raschsvei: (raw.needOverride as Record<string, number | null>)?.raschsvei ?? null,
     },
-    v: 3 as const,
+    image: typeof raw.image === 'string' ? raw.image : '',
+    v: 4 as const,
   };
 
-  // v3: normaliser instanser.
+  // v4: normaliser, behold alt.
+  if (raw.v === 4 && Array.isArray(raw.instances)) {
+    return { ...base, instances: normalizeInstances(raw.instances) };
+  }
+
+  // v3: REPARASJON. Migreringen laget feilaktig spøkelses-eksemplarer fra
+  // thumbnails, og de havnet alltid på Raschs Vei. Behold Østerliveien-
+  // eksemplarene (ekte, laget kun fra faktiske tall), fjern Raschs Vei, og
+  // løft et bilde til generell thumbnail så kortet fortsatt viser et bilde.
   if (raw.v === 3 && Array.isArray(raw.instances)) {
-    const instances = (raw.instances as ToolInstance[]).map((i) => ({
-      id: i.id || generateId(),
-      location: i.location === 'osterliveien' ? 'osterliveien' : 'raschsvei',
-      image: i.image ?? '',
-      label: i.label ?? '',
-    }) as ToolInstance);
-    return { ...base, instances };
+    const all = normalizeInstances(raw.instances);
+    const kept = all.filter((i) => i.location === 'osterliveien');
+    const image = base.image || all.find((i) => i.image)?.image || '';
+    return { ...base, instances: kept, image };
   }
 
   const legacy = raw as LegacyToolFields;
 
-  // v1: legacy inventory[] — bevarer lokasjon↔bilde-paring per eksemplar.
+  // v1: inventory[] = faktiske eksemplarer med lokasjon; tool.image = generell.
   if (Array.isArray(legacy.inventory)) {
     const instances = legacy.inventory.map((item) =>
       instance(
@@ -71,10 +90,12 @@ export function migrateTool(raw: Record<string, unknown>): Tool {
         item.name || ''
       )
     );
-    return { ...base, instances };
+    const image = base.image || legacy.candidates?.find((c) => c.image)?.image || '';
+    return { ...base, instances, image };
   }
 
-  // v2: counts + images → bygg eksemplarer, fordel bilder sekvensielt.
+  // v2: counts + images → eksemplarer KUN fra counts; resterende bilder blir
+  // generell thumbnail (aldri spøkelses-eksemplarer).
   const counts = legacy.counts ?? {};
   const images = Array.isArray(legacy.images) ? legacy.images.filter(Boolean) : [];
   const instances: ToolInstance[] = [];
@@ -82,27 +103,16 @@ export function migrateTool(raw: Record<string, unknown>): Tool {
   const houses: House[] = ['osterliveien', 'raschsvei'];
   for (const house of houses) {
     const n = Number(counts[house]) || 0;
-    for (let k = 0; k < n; k++) {
-      instances.push(instance(house, images[imgIdx++] ?? ''));
-    }
+    for (let k = 0; k < n; k++) instances.push(instance(house, images[imgIdx++] ?? ''));
   }
-  // Overskytende bilder (flere bilder enn eksemplarer) beholdes som ekstra
-  // eksemplarer på Raschs Vei, så ingen thumbnail går tapt.
-  while (imgIdx < images.length) {
-    instances.push(instance('raschsvei', images[imgIdx++]));
-  }
-  // Verktøy uten counts og uten bilder, men med gammelt tool.image.
-  if (instances.length === 0 && legacy.image) {
-    instances.push(instance('raschsvei', legacy.image));
-  }
-
-  return { ...base, instances };
+  const image = base.image || images[imgIdx] || images[0] || legacy.image || '';
+  return { ...base, instances, image };
 }
 
 /**
- * Engangs skrivemigrering til v3 (styrt av meta/migration-dokumentet):
+ * Engangs skrivemigrering til v4 (styrt av meta/migration-dokumentet):
  * skriver alle verktøy om til den nye formen og rydder bort kits og
- * gamle meta-dokumenter. Idempotent uansett om prod allerede er v2.
+ * gamle meta-dokumenter. Idempotent uansett hvilken versjon prod har.
  */
 export async function runMigration(tools: Tool[]): Promise<void> {
   const meta = await getDoc(migrationDoc);

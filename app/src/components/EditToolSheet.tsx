@@ -115,6 +115,25 @@ export function EditToolSheet({ tool, categories, onClose }: EditToolSheetProps)
         </div>
 
         <div className="form-group">
+          <label className="form-label">Generell thumbnail</label>
+          <div className="inline-row">
+            <div className="instance-thumb">
+              {tool.image ? (
+                <img src={tool.image} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="instance-thumb-empty">?</span>
+              )}
+            </div>
+            <input
+              className="form-input"
+              value={tool.image}
+              onChange={(e) => updateTool(tool.id, { image: e.target.value })}
+              placeholder="Bilde-URL (valgfritt, uavhengig av eksemplarer)"
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
           <label className="form-label">
             Eksemplarer ({HOUSES.map((h) => `${houseLabel(h)}: ${countAt(tool, h)}`).join(' · ')})
           </label>
