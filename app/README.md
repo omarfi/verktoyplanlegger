@@ -1,73 +1,35 @@
-# React + TypeScript + Vite
+# Verktøyplanlegger
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+En mobil-først, delt verktøy- og handleliste for Raschs Vei og Østerliveien.
 
-Currently, two official plugins are available:
+## Kjør lokalt
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Åpne `/verktoyplanlegger/?preview` for å teste grensesnittet med eksempeldata uten å logge inn eller skrive til Firestore.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run lint
+npm run build
 ```
+
+## Data og synk
+
+- Google-innlogging er begrenset til de to godkjente kontoene i `src/store.tsx`.
+- Firestore-samlingen `tools` er sannhetskilden for v4-verktøymodellen.
+- `src/migration.ts` normaliserer eldre dokumenter og beskytter mot spøkelseseksemplarer.
+- Firestore bruker vedvarende flerfane-cache. Headeren viser `Lagrer`, `Lagret`, `Frakoblet` eller `Synkfeil`.
+- Skjemaer redigerer lokale utkast og skriver først når brukeren lagrer.
+- PWA-shell og service worker gjør appflaten tilgjengelig uten nett; Firestore køer endringer.
+
+## Viktige brukerflyter
+
+- `Alle`, `Handleliste` og `Har` med egne person-/hustoggles.
+- Avatarbasert eierskap og behov i vanlig språk på kort og detaljark.
+- Hurtigregistrering med eier, bilde, kategoriforslag og duplikatvern.
+- Separat lese- og redigeringsmodus med bilde-URL-forhåndsvisning.
+- Ett-trykks `Kjøpt ✓`, delbar handleliste og angre på mutasjoner.
+- Langtrykk eller profilmeny for sammenslåing; alle bilder, notater, behov og eksemplarer bevares.

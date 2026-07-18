@@ -4,15 +4,20 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  subtitle?: string;
   children: ReactNode;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, subtitle, children }: ModalProps) {
   if (!open) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">{title}</div>
+      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grabber" />
+        <div className="modal-header">
+          <div><div className="modal-title" id="modal-title">{title}</div>{subtitle && <p>{subtitle}</p>}</div>
+          <button className="icon-button" onClick={onClose} aria-label="Lukk">×</button>
+        </div>
         {children}
       </div>
     </div>

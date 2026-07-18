@@ -25,3 +25,14 @@ export interface Tool {
   /** Skjemaversjon for Firestore-dokumentet. */
   v: 4;
 }
+
+export interface NewToolInput {
+  name: string;
+  category: string;
+  type: ToolType;
+  image?: string;
+  notes?: string;
+  owner?: House | null;
+}
+
+export type SyncStatus = 'loading' | 'saving' | 'saved' | 'offline' | 'error';

@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { AppContext, type AppContextValue } from './context';
 import { AuthProvider } from './store';
 import { ToolListScreen } from './screens/ToolListScreen';
-import type { Tool, ToolInstance, House, ToolType } from './types';
+import type { Tool, ToolInstance, House, NewToolInput } from './types';
 import { generateId } from './logic';
 
 function svgThumb(label: string, bg: string): string {
@@ -54,24 +54,46 @@ function PreviewAppProvider({ children }: { children: ReactNode }) {
   const value: AppContextValue = {
     tools,
     loading: false,
+    syncStatus: 'saved',
     avatars: { osterliveien: avatar('P', '#b45309'), raschsvei: avatar('O', '#0e7490') },
-    updateTool: (id, updates) => setTools((ts) => ts.map((t) => (t.id === id ? { ...t, ...updates } : t))),
-    addTool: (name: string, category: string, type: ToolType) =>
-      setTools((ts) => [...ts, sample({ name, category, type })]),
+    updateTool: (id, updates) => {
+      const existing = tools.find((tool) => tool.id === id);
+      if (!existing) return null;
+      const updated = { ...existing, ...updates };
+      setTools((current) => current.map((tool) => tool.id === id ? updated : tool));
+      return updated;
+    },
+    putTool: (tool) => setTools((current) => current.some((item) => item.id === tool.id) ? current.map((item) => item.id === tool.id ? tool : item) : [...current, tool]),
+    addTool: (input: NewToolInput) => {
+      const tool = sample({
+        name: input.name,
+        category: input.category,
+        type: input.type,
+        image: input.image ?? '',
+        notes: input.notes ?? '',
+        instances: input.owner ? [inst(input.owner, input.image ?? '')] : [],
+      });
+      setTools((current) => [...current, tool]);
+      return tool;
+    },
     deleteTool: (id) => setTools((ts) => ts.filter((t) => t.id !== id)),
-    mergeTools: (ids, meta) =>
-      setTools((ts) => {
-        const selected = ids.map((id) => ts.find((t) => t.id === id)).filter((t): t is Tool => !!t);
-        if (selected.length < 2) return ts;
-        const survivor = selected[0];
-        const merged: Tool = {
-          ...survivor,
-          ...meta,
-          instances: selected.flatMap((t) => t.instances).map((i) => ({ ...i, id: generateId() })),
-        };
-        const removed = new Set(selected.slice(1).map((t) => t.id));
-        return ts.map((t) => (t.id === merged.id ? merged : t)).filter((t) => !removed.has(t.id));
-      }),
+    mergeTools: (ids, meta) => {
+      const selected = ids.map((id) => tools.find((tool) => tool.id === id)).filter((tool): tool is Tool => Boolean(tool));
+      const survivor = selected.find((tool) => tool.id === meta.survivorId);
+      if (!survivor || selected.length < 2) return null;
+      const merged: Tool = {
+        ...survivor,
+        name: meta.name,
+        category: meta.category,
+        type: meta.type,
+        image: selected.find((tool) => tool.image)?.image ?? '',
+        notes: [...new Set(selected.map((tool) => tool.notes).filter(Boolean))].join('\n\n'),
+        instances: selected.flatMap((tool) => tool.instances),
+      };
+      const removed = new Set(selected.filter((tool) => tool.id !== survivor.id).map((tool) => tool.id));
+      setTools((current) => current.map((tool) => tool.id === merged.id ? merged : tool).filter((tool) => !removed.has(tool.id)));
+      return merged;
+    },
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

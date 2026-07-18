@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
-import type { Tool, House } from './types';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { Tool, House, NewToolInput, SyncStatus } from './types';
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
@@ -7,7 +7,6 @@ import { migrateTool, runMigration } from './migration';
 import { generateId } from './logic';
 import { AuthContext, AppContext, type AppContextValue } from './context';
 
-/** Godkjente konti og hvilket hus de representerer. */
 const EMAIL_TO_HOUSE: Record<string, House> = {
   'omar1490@gmail.com': 'raschsvei',
   'ilyas.narvesen@gmail.com': 'osterliveien',
@@ -16,164 +15,232 @@ const EMAIL_TO_HOUSE: Record<string, House> = {
 const ACCESS_ERROR = 'Kun autoriserte Google-konti har tilgang.';
 const avatarsDoc = doc(db, 'meta', 'avatars');
 
-/* ── Auth provider ── */
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const avatarWritten = useRef(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      const house = u?.email ? EMAIL_TO_HOUSE[u.email] : undefined;
-      if (u && !house) {
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      const house = nextUser?.email ? EMAIL_TO_HOUSE[nextUser.email] : undefined;
+      if (nextUser && !house) {
         signOut(auth);
         setAuthError(ACCESS_ERROR);
         setUser(null);
       } else {
-        setUser(u);
+        setUser(nextUser);
         setAuthError(null);
-        // Fang Google-avataren for kontoens hus (én gang per økt).
-        if (u && house && u.photoURL && !avatarWritten.current) {
+        if (nextUser && house && nextUser.photoURL && !avatarWritten.current) {
           avatarWritten.current = true;
-          setDoc(avatarsDoc, { [house]: u.photoURL }, { merge: true }).catch((e) =>
-            console.error('Kunne ikke lagre avatar:', e)
+          setDoc(avatarsDoc, { [house]: nextUser.photoURL }, { merge: true }).catch((error) =>
+            console.error('Kunne ikke lagre avatar:', error)
           );
         }
       }
       setLoading(false);
     });
-    return unsub;
+    return unsubscribe;
   }, []);
 
   const signIn = async () => {
     setAuthError(null);
+    setSigningIn(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (!result.user.email || !EMAIL_TO_HOUSE[result.user.email]) {
         await signOut(auth);
         setAuthError(ACCESS_ERROR);
       }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Innlogging feilet';
-      setAuthError(msg);
+    } catch (error: unknown) {
+      setAuthError(error instanceof Error ? error.message : 'Innlogging feilet');
+    } finally {
+      setSigningIn(false);
     }
   };
 
-  const logOut = async () => {
-    await signOut(auth);
-  };
-
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, logOut, authError }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signingIn,
+        signIn,
+        logOut: () => signOut(auth),
+        authError,
+        currentHouse: user?.email ? EMAIL_TO_HOUSE[user.email] ?? null : null,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
-
-/* ── App data provider (Firestore-backed, global shared data) ── */
 
 const toolsCol = collection(db, 'tools');
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(navigator.onLine ? 'loading' : 'offline');
   const [avatars, setAvatars] = useState<Record<House, string | null>>({
     osterliveien: null,
     raschsvei: null,
   });
   const migrationAttempted = useRef(false);
+  const pendingWrites = useRef(0);
+
+  const trackWrite = (operation: Promise<unknown>) => {
+    pendingWrites.current += 1;
+    setSyncStatus(navigator.onLine ? 'saving' : 'offline');
+    operation
+      .then(() => {
+        pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+        setSyncStatus(navigator.onLine ? (pendingWrites.current ? 'saving' : 'saved') : 'offline');
+      })
+      .catch((error) => {
+        pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+        setSyncStatus(navigator.onLine ? 'error' : 'offline');
+        console.error('Firestore-skriving feilet:', error);
+      });
+  };
 
   useEffect(() => {
-    const unsub = onSnapshot(toolsCol, (snap) => {
-      setTools(snap.docs.map((d) => migrateTool(d.data())));
-      setLoading(false);
-    });
-    return unsub;
+    const online = () => setSyncStatus(pendingWrites.current ? 'saving' : 'saved');
+    const offline = () => setSyncStatus('offline');
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+    };
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(avatarsDoc, (snap) => {
-      const data = snap.exists() ? (snap.data() as Partial<Record<House, string>>) : {};
+    const unsubscribe = onSnapshot(
+      toolsCol,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        setTools(snapshot.docs.map((item) => migrateTool(item.data())));
+        setLoading(false);
+        if (!navigator.onLine || snapshot.metadata.fromCache) setSyncStatus('offline');
+        else if (snapshot.metadata.hasPendingWrites || pendingWrites.current) setSyncStatus('saving');
+        else setSyncStatus('saved');
+      },
+      (error) => {
+        console.error('Firestore-lytter feilet:', error);
+        setLoading(false);
+        setSyncStatus('error');
+      }
+    );
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(avatarsDoc, (snapshot) => {
+      const data = snapshot.exists() ? (snapshot.data() as Partial<Record<House, string>>) : {};
       setAvatars({ osterliveien: data.osterliveien ?? null, raschsvei: data.raschsvei ?? null });
     });
-    return unsub;
+    return unsubscribe;
   }, []);
 
-  // Engangs skrivemigrering til v3 når dataene er lastet.
   useEffect(() => {
     if (loading || migrationAttempted.current) return;
     migrationAttempted.current = true;
-    runMigration(tools).catch((e) => {
-      console.error('Migrering til v3 feilet:', e);
-    });
+    runMigration(tools).catch((error) => console.error('Migrering til v4 feilet:', error));
   }, [loading, tools]);
 
-  const mapTool = useCallback((id: string, fn: (t: Tool) => Tool) => {
-    setTools((tools) =>
-      tools.map((t) => {
-        if (t.id !== id) return t;
-        const updated = fn(t);
-        setDoc(doc(toolsCol, updated.id), updated);
-        return updated;
-      })
+  const updateTool = (id: string, updates: Partial<Tool>): Tool | null => {
+    const existing = tools.find((tool) => tool.id === id);
+    if (!existing) return null;
+    const updated = { ...existing, ...updates };
+    setTools((current) => current.map((tool) => (tool.id === id ? updated : tool)));
+    trackWrite(setDoc(doc(toolsCol, updated.id), updated));
+    return updated;
+  };
+
+  const putTool = (tool: Tool) => {
+    setTools((current) => {
+      const exists = current.some((item) => item.id === tool.id);
+      return exists ? current.map((item) => (item.id === tool.id ? tool : item)) : [...current, tool];
+    });
+    trackWrite(setDoc(doc(toolsCol, tool.id), tool));
+  };
+
+  const addTool = (input: NewToolInput): Tool => {
+    const tool: Tool = {
+      id: generateId(),
+      name: input.name,
+      category: input.category,
+      type: input.type,
+      image: input.image ?? '',
+      instances: input.owner
+        ? [{ id: generateId(), location: input.owner, image: input.image ?? '', label: '' }]
+        : [],
+      needOverride: { osterliveien: null, raschsvei: null },
+      notes: input.notes ?? '',
+      v: 4,
+    };
+    setTools((current) => [...current, tool]);
+    trackWrite(setDoc(doc(toolsCol, tool.id), tool));
+    return tool;
+  };
+
+  const deleteTool = (id: string) => {
+    setTools((current) => current.filter((tool) => tool.id !== id));
+    trackWrite(deleteDoc(doc(toolsCol, id)));
+  };
+
+  const mergeTools: AppContextValue['mergeTools'] = (ids, meta) => {
+    if (ids.length < 2) return null;
+    const selected = ids
+      .map((id) => tools.find((tool) => tool.id === id))
+      .filter((tool): tool is Tool => Boolean(tool));
+    const survivor = selected.find((tool) => tool.id === meta.survivorId);
+    if (!survivor || selected.length < 2) return null;
+
+    const merged: Tool = {
+      ...survivor,
+      name: meta.name,
+      category: meta.category,
+      type: meta.type,
+      image: selected.find((tool) => tool.image)?.image ?? '',
+      notes: [...new Set(selected.map((tool) => tool.notes.trim()).filter(Boolean))].join('\n\n'),
+      instances: selected.flatMap((tool) => tool.instances).map((instance) => ({ ...instance })),
+      needOverride: {
+        osterliveien:
+          survivor.needOverride.osterliveien ??
+          selected.find((tool) => tool.needOverride.osterliveien !== null)?.needOverride.osterliveien ??
+          null,
+        raschsvei:
+          survivor.needOverride.raschsvei ??
+          selected.find((tool) => tool.needOverride.raschsvei !== null)?.needOverride.raschsvei ??
+          null,
+      },
+    };
+    const removedIds = selected.filter((tool) => tool.id !== survivor.id).map((tool) => tool.id);
+    const batch = writeBatch(db);
+    batch.set(doc(toolsCol, merged.id), merged);
+    removedIds.forEach((id) => batch.delete(doc(toolsCol, id)));
+    trackWrite(batch.commit());
+
+    const removed = new Set(removedIds);
+    setTools((current) =>
+      current.map((tool) => (tool.id === merged.id ? merged : tool)).filter((tool) => !removed.has(tool.id))
     );
-  }, []);
+    return merged;
+  };
 
   const value: AppContextValue = {
     tools,
     loading,
+    syncStatus,
     avatars,
-    updateTool: (id, updates) => mapTool(id, (t) => ({ ...t, ...updates })),
-    addTool: (name, category, type) => {
-      const tool: Tool = {
-        id: generateId(),
-        name,
-        category,
-        type,
-        image: '',
-        instances: [],
-        needOverride: { osterliveien: null, raschsvei: null },
-        notes: '',
-        v: 4,
-      };
-      setTools((tools) => [...tools, tool]);
-      setDoc(doc(toolsCol, tool.id), tool);
-    },
-    deleteTool: (id) => {
-      setTools((tools) => tools.filter((t) => t.id !== id));
-      deleteDoc(doc(toolsCol, id));
-    },
-    mergeTools: (ids, meta) => {
-      if (ids.length < 2) return;
-      setTools((tools) => {
-        const selected = ids
-          .map((id) => tools.find((t) => t.id === id))
-          .filter((t): t is Tool => !!t);
-        if (selected.length < 2) return tools;
-        const survivor = selected[0];
-        const mergedInstances = selected
-          .flatMap((t) => t.instances)
-          .map((i) => ({ ...i, id: generateId() }));
-        const merged: Tool = {
-          ...survivor,
-          name: meta.name,
-          category: meta.category,
-          type: meta.type,
-          instances: mergedInstances,
-        };
-        const removedIds = selected.slice(1).map((t) => t.id);
-
-        const batch = writeBatch(db);
-        batch.set(doc(toolsCol, merged.id), merged);
-        for (const rid of removedIds) batch.delete(doc(toolsCol, rid));
-        batch.commit().catch((e) => console.error('Sammenslåing feilet:', e));
-
-        const removed = new Set(removedIds);
-        return tools.map((t) => (t.id === merged.id ? merged : t)).filter((t) => !removed.has(t.id));
-      });
-    },
+    updateTool,
+    putTool,
+    addTool,
+    deleteTool,
+    mergeTools,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

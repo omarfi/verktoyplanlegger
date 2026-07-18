@@ -1,0 +1,18 @@
+{
+  "name": "Verktøyplanlegger",
+  "short_name": "Verktøy",
+  "description": "Delt verktøy- og handleliste for Omar og Ilyas.",
+  "lang": "nb",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f3f0",
+  "theme_color": "#1d9e75",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

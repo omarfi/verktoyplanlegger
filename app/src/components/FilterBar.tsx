@@ -1,56 +1,57 @@
-import type { Tool } from '../types';
-import { matchesFilter, houseLabel, type Filter, type HouseFilter, type StatusFilter } from '../logic';
+import type { House } from '../types';
+import type { ViewIntent } from '../logic';
+import { HOUSES, housePerson } from '../logic';
 import { HouseBadge } from './HouseBadge';
 
-const HOUSE_OPTIONS: HouseFilter[] = ['begge', 'osterliveien', 'raschsvei'];
-const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
+interface FilterBarProps {
+  intent: ViewIntent;
+  houses: House[];
+  onIntentChange: (intent: ViewIntent) => void;
+  onHousesChange: (houses: House[]) => void;
+}
+
+const INTENTS: { key: ViewIntent; label: string }[] = [
   { key: 'alle', label: 'Alle' },
-  { key: 'mangler', label: 'Mangler' },
-  { key: 'trenger', label: 'Trenger' },
+  { key: 'handleliste', label: 'Handleliste' },
   { key: 'har', label: 'Har' },
 ];
 
-interface FilterBarProps {
-  filter: Filter;
-  onChange: (filter: Filter) => void;
-  tools: Tool[];
-}
-
-export function FilterBar({ filter, onChange, tools }: FilterBarProps) {
-  const countFor = (status: StatusFilter) =>
-    tools.filter((t) => matchesFilter(t, { house: filter.house, status })).length;
+export function FilterBar({ intent, houses, onIntentChange, onHousesChange }: FilterBarProps) {
+  const toggleHouse = (house: House) => {
+    onHousesChange(houses.includes(house) ? houses.filter((item) => item !== house) : [...houses, house]);
+  };
 
   return (
-    <div className="filter-bar">
-      <div className="segmented" role="group" aria-label="Hus">
-        {HOUSE_OPTIONS.map((house) => (
+    <div className="filter-row">
+      <div className="intent-segments" role="tablist" aria-label="Hva vil du se?">
+        {INTENTS.map((item) => (
           <button
-            key={house}
-            className={`segment ${filter.house === house ? 'active' : ''}`}
-            onClick={() => onChange({ ...filter, house })}
+            key={item.key}
+            className="intent-segment"
+            role="tab"
+            aria-selected={intent === item.key}
+            onClick={() => onIntentChange(item.key)}
           >
-            {house === 'begge' ? (
-              'Begge'
-            ) : (
-              <>
-                <HouseBadge house={house} size={18} />
-                {houseLabel(house)}
-              </>
-            )}
+            {item.label}
           </button>
         ))}
       </div>
-      <div className="segmented" role="group" aria-label="Status">
-        {STATUS_OPTIONS.map(({ key, label }) => (
-          <button
-            key={key}
-            className={`segment ${filter.status === key ? 'active' : ''}`}
-            onClick={() => onChange({ ...filter, status: key })}
-          >
-            {label}
-            <span className="segment-count">{countFor(key)}</span>
-          </button>
-        ))}
+      <div className="house-toggles" aria-label="Velg person eller hus">
+        {HOUSES.map((house) => {
+          const active = houses.includes(house);
+          return (
+            <button
+              key={house}
+              className="house-toggle"
+              aria-pressed={active}
+              aria-label={`${active ? 'Fjern' : 'Vis'} ${housePerson(house)}`}
+              onClick={() => toggleHouse(house)}
+            >
+              <HouseBadge house={house} size={32} />
+              <span>{housePerson(house)}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

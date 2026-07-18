@@ -6,6 +6,18 @@ export function houseLabel(house: House): string {
   return house === 'osterliveien' ? 'Østerliveien' : 'Raschs Vei';
 }
 
+export function housePerson(house: House): string {
+  return house === 'osterliveien' ? 'Ilyas' : 'Omar';
+}
+
+export function houseInitials(house: House): string {
+  return house === 'osterliveien' ? 'IL' : 'OM';
+}
+
+export function otherHouse(house: House): House {
+  return house === 'osterliveien' ? 'raschsvei' : 'osterliveien';
+}
+
 /** Beholdning: antall eksemplarer plassert i et gitt hus. */
 export function countAt(tool: Tool, house: House): number {
   return tool.instances.filter((i) => i.location === house).length;
@@ -27,6 +39,7 @@ export function effectiveNeed(tool: Tool, house: House): number {
 
 export type HouseFilter = 'begge' | House;
 export type StatusFilter = 'alle' | 'mangler' | 'trenger' | 'har';
+export type ViewIntent = 'alle' | 'handleliste' | 'har';
 
 export interface Filter {
   house: HouseFilter;
@@ -49,11 +62,87 @@ export function matchesFilter(tool: Tool, filter: Filter): boolean {
 }
 
 export function toolMatchesSearch(tool: Tool, query: string): boolean {
-  const q = query.trim().toLowerCase();
+  const q = normalize(query);
   if (!q) return true;
-  if (tool.name.toLowerCase().includes(q)) return true;
-  if (tool.category.toLowerCase().includes(q)) return true;
-  return tool.instances.some((i) => i.label.toLowerCase().includes(q));
+  if (normalize(tool.name).includes(q)) return true;
+  if (normalize(tool.category).includes(q)) return true;
+  if (normalize(tool.notes).includes(q)) return true;
+  return tool.instances.some((i) => normalize(i.label).includes(q));
+}
+
+export function normalize(value = ''): string {
+  return value
+    .toLocaleLowerCase('nb')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ø/g, 'o')
+    .replace(/æ/g, 'ae')
+    .trim();
+}
+
+export function matchesIntent(tool: Tool, intent: ViewIntent, selectedHouses: House[]): boolean {
+  const houses = selectedHouses.length ? selectedHouses : HOUSES;
+  if (intent === 'handleliste') return houses.some((house) => effectiveNeed(tool, house) > 0);
+  if (intent === 'har') return houses.some((house) => countAt(tool, house) > 0);
+  return true;
+}
+
+export interface DuplicateMatch {
+  tool: Tool;
+  score: number;
+}
+
+function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) {
+    return Math.min(a.length, b.length) / Math.max(a.length, b.length) + 0.2;
+  }
+  const aa = new Set(a.split(/\s+/));
+  const bb = new Set(b.split(/\s+/));
+  const overlap = [...aa].filter((word) => bb.has(word)).length;
+  return overlap / Math.max(aa.size, bb.size);
+}
+
+export function findDuplicates(name: string, tools: Tool[], exceptId = ''): DuplicateMatch[] {
+  const wanted = normalize(name);
+  if (!wanted) return [];
+  return tools
+    .filter((tool) => tool.id !== exceptId)
+    .map((tool) => ({ tool, score: similarity(wanted, normalize(tool.name)) }))
+    .filter(({ score }) => score >= 0.55)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+}
+
+const CATEGORY_HINTS: [string, RegExp][] = [
+  ['Måleverktøy', /mål|vater|linjal|vinkel|skyve/],
+  ['Skrutrekkere og bits', /skru|bits|torx/],
+  ['Nøkler', /nøkkel/],
+  ['Tenger', /tang/],
+  ['Klemmer og tvinger', /klem|tving/],
+  ['Skjæreverktøy', /sag|kniv|saks|meisel|fil/],
+  ['Slagverktøy', /hammer|klubbe/],
+  ['Arbeidslys', /lys|lykt/],
+  ['Oppbevaring', /kasse|boks|skuff|oppbevar/],
+];
+
+export function suggestCategory(name: string): string {
+  const value = normalize(name);
+  return CATEGORY_HINTS.find(([, pattern]) => pattern.test(value))?.[0] ?? 'Annet';
+}
+
+export function shoppingListText(tools: Tool[], selectedHouses: House[]): string {
+  const houses = selectedHouses.length ? selectedHouses : HOUSES;
+  const sections = houses
+    .map((house) => {
+      const rows = tools
+        .map((tool) => ({ tool, amount: effectiveNeed(tool, house) }))
+        .filter(({ amount }) => amount > 0)
+        .map(({ tool, amount }) => `• ${tool.name}${amount > 1 ? ` ×${amount}` : ''}`);
+      return rows.length ? `${houseLabel(house)}:\n${rows.join('\n')}` : '';
+    })
+    .filter(Boolean);
+  return `Handleliste – Verktøyplanlegger\n\n${sections.join('\n\n')}`;
 }
 
 export function generateId(): string {

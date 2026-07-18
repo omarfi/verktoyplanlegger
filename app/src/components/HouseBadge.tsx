@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import type { House } from '../types';
-import { houseLabel } from '../logic';
+import { houseInitials, houseLabel } from '../logic';
 import { useApp } from '../context';
 import {
   AVATAR_FILE,
@@ -36,14 +36,14 @@ export function HouseBadge({ house, size = 20 }: { house: House; size?: number }
       title={houseLabel(house)}
       aria-label={houseLabel(house)}
     >
-      {src && (
+      {src ? (
         <img
           src={src}
           alt={houseLabel(house)}
           referrerPolicy="no-referrer"
           style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
         />
-      )}
+      ) : <span className="house-initials" aria-hidden="true">{houseInitials(house)}</span>}
     </span>
   );
 }

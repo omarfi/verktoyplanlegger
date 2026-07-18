@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { User } from 'firebase/auth';
-import type { Tool, ToolType, House } from './types';
+import type { Tool, ToolType, House, NewToolInput, SyncStatus } from './types';
 
 export interface AuthContextValue {
   user: User | null;
@@ -8,6 +8,8 @@ export interface AuthContextValue {
   signIn: () => Promise<void>;
   logOut: () => Promise<void>;
   authError: string | null;
+  signingIn: boolean;
+  currentHouse: House | null;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -19,6 +21,7 @@ export function useAuth() {
 }
 
 export interface MergeMeta {
+  survivorId: string;
   name: string;
   category: string;
   type: ToolType;
@@ -27,11 +30,13 @@ export interface MergeMeta {
 export interface AppContextValue {
   tools: Tool[];
   loading: boolean;
+  syncStatus: SyncStatus;
   avatars: Record<House, string | null>;
-  updateTool: (id: string, updates: Partial<Tool>) => void;
-  addTool: (name: string, category: string, type: ToolType) => void;
+  updateTool: (id: string, updates: Partial<Tool>) => Tool | null;
+  putTool: (tool: Tool) => void;
+  addTool: (input: NewToolInput) => Tool;
   deleteTool: (id: string) => void;
-  mergeTools: (ids: string[], meta: MergeMeta) => void;
+  mergeTools: (ids: string[], meta: MergeMeta) => Tool | null;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);
