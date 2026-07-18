@@ -8,6 +8,8 @@ export interface ToolInstance {
   location: House;
   image: string;   // thumbnail-URL, kan være ''
   label: string;   // valgfritt merke/variant, f.eks. 'Bahco', kan være ''
+  /** Planlagt destinasjon. Lokasjonen endres først når flyttingen bekreftes. */
+  moveTo?: House | null;
 }
 
 export interface Tool {

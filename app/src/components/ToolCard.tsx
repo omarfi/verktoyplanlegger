@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { Tool, House } from '../types';
-import { HOUSES, countAt, effectiveNeed, houseLabel } from '../logic';
+import { HOUSES, countAt, effectiveNeed, houseLabel, pendingMoveCount } from '../logic';
 import { HouseBadge } from './HouseBadge';
 import { ToolImage } from './ToolImage';
 
@@ -13,6 +13,21 @@ interface ToolCardProps {
   selectedHouses: House[];
   shopping?: boolean;
   onPurchased?: () => void;
+  onMoved?: (instanceId: string) => void;
+}
+
+function cardImages(tool: Tool): string[] {
+  if (tool.instances.length === 0) return [tool.image];
+
+  if (tool.instances.length === 1) {
+    const instanceImage = tool.instances[0].image.trim();
+    const generalImage = tool.image.trim();
+    if (!instanceImage || instanceImage === generalImage) return [generalImage || instanceImage];
+    if (!generalImage) return [instanceImage];
+    return [generalImage, instanceImage];
+  }
+
+  return tool.instances.slice(0, 2).map((instance) => instance.image.trim() || tool.image.trim());
 }
 
 export function ToolCard({
@@ -24,6 +39,7 @@ export function ToolCard({
   selectedHouses,
   shopping = false,
   onPurchased,
+  onMoved,
 }: ToolCardProps) {
   const timer = useRef<number | null>(null);
   const longPressed = useRef(false);
@@ -31,11 +47,15 @@ export function ToolCard({
     .map((house) => ({ house, count: countAt(tool, house) }))
     .filter(({ count }) => count > 0);
   const scope = selectedHouses.length ? selectedHouses : HOUSES;
+  const moves = scope
+    .map((house) => ({ house, count: pendingMoveCount(tool, house) }))
+    .filter(({ count }) => count > 0);
   const needs = scope
-    .map((house) => ({ house, count: effectiveNeed(tool, house) }))
+    .map((house) => ({ house, count: Math.max(0, effectiveNeed(tool, house) - pendingMoveCount(tool, house)) }))
     .filter(({ count }) => count > 0);
   const need = needs.reduce((sum, item) => sum + item.count, 0);
-  const image = tool.instances.find((instance) => instance.image)?.image || tool.image;
+  const images = cardImages(tool);
+  const pendingInstance = tool.instances.find((instance) => instance.moveTo && scope.includes(instance.moveTo));
 
   const startPress = () => {
     longPressed.current = false;
@@ -65,7 +85,13 @@ export function ToolCard({
         }}
         aria-label={`${selectMode ? (selected ? 'Fjern' : 'Velg') : 'Åpne'} ${tool.name}`}
       >
-        <div className="tool-card-image"><ToolImage src={image} alt="" /></div>
+        <div className={`tool-card-image ${images.length > 1 ? 'is-split' : ''}`}>
+          {images.map((image, index) => (
+            <span className="tool-card-image-pane" key={`${image}-${index}`}>
+              <ToolImage src={image} alt="" />
+            </span>
+          ))}
+        </div>
         <div className="ownership-badges" aria-label={ownedHouses.length ? 'Beholdning hos registrerte eiere' : 'Ingen har den'}>
           {ownedHouses.map(({ house, count }) => (
             <span className="ownership-badge" key={house} aria-label={`${count} stk hos ${houseLabel(house)}`}>
@@ -77,6 +103,11 @@ export function ToolCard({
         <div className="tool-card-copy">
           <h3>{tool.name}</h3>
           {tool.type === 'avansert' && <span className="tool-type-tag">Avansert</span>}
+          {moves.length > 0 && (
+            <div className="tool-move-list">
+              {moves.map(({ house, count }) => <strong key={house}>Flytt{count > 1 ? ` ${count} stk` : ''} til {houseLabel(house)}</strong>)}
+            </div>
+          )}
           {needs.length > 0 && (
             <div className="tool-need-list">
               {needs.map(({ house, count }) => <strong key={house}>Kjøp {count} stk til {houseLabel(house)}</strong>)}
@@ -84,8 +115,11 @@ export function ToolCard({
           )}
         </div>
       </button>
-      {shopping && need > 0 && onPurchased && (
-        <button className="purchased-button" onClick={onPurchased}>Kjøpt ✓</button>
+      {shopping && (pendingInstance || need > 0) && (
+        <div className="tool-card-actions">
+          {pendingInstance && onMoved && <button className="moved-button" onClick={() => onMoved(pendingInstance.id)}>Flyttet ✓</button>}
+          {need > 0 && onPurchased && <button className="purchased-button" onClick={onPurchased}>Kjøpt ✓</button>}
+        </div>
       )}
     </article>
   );

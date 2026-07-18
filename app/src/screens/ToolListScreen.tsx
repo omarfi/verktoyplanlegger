@@ -150,6 +150,22 @@ export function ToolListScreen() {
     notify(`${tool.name} er lagt til hos ${houseLabel(destination)}`, () => putTool(before));
   };
 
+  const markMoved = (tool: Tool, instanceId: string) => {
+    const instance = tool.instances.find((item) => item.id === instanceId);
+    const destination = instance?.moveTo;
+    if (!instance || !destination) return;
+    const before = structuredClone(tool);
+    const override = tool.needOverride[destination];
+    updateTool(tool.id, {
+      instances: tool.instances.map((item) => item.id === instanceId ? { ...item, location: destination, moveTo: null } : item),
+      needOverride: {
+        ...tool.needOverride,
+        [destination]: typeof override === 'number' && override > 0 ? Math.max(0, override - 1) : override,
+      },
+    });
+    notify(`${instance.label || tool.name} er flyttet til ${houseLabel(destination)}`, () => putTool(before));
+  };
+
   const shareList = async () => {
     const text = shoppingListText(tools, houses);
     try {
@@ -173,7 +189,6 @@ export function ToolListScreen() {
           {profileOpen && (
             <div className="profile-menu">
               <div className="profile-summary"><HouseBadge house={currentHouse} size={34} /><span><strong>{housePerson(currentHouse)}</strong><small>{houseLabel(currentHouse)}</small></span></div>
-              <button onClick={() => enterSelectMode()}>Slå sammen duplikater</button>
               <button onClick={logOut}>Logg ut</button>
             </div>
           )}
@@ -223,6 +238,7 @@ export function ToolListScreen() {
                       onClick={() => toggleSelected(tool)}
                       onLongPress={() => enterSelectMode(tool)}
                       onPurchased={() => markPurchased(tool)}
+                      onMoved={(instanceId) => markMoved(tool, instanceId)}
                     />
                   ))}</div>}
                 </section>

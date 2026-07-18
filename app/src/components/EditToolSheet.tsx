@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Tool, ToolInstance, House, ToolType } from '../types';
 import { useApp } from '../context';
-import { HOUSES, countAt, derivedNeed, effectiveNeed, generateId, houseLabel, housePerson, otherHouse } from '../logic';
+import { HOUSES, countAt, derivedNeed, effectiveNeed, generateId, houseLabel, housePerson, otherHouse, pendingMoveCount } from '../logic';
 import { HouseBadge } from './HouseBadge';
 import { ConfirmDialog } from './Modal';
 import { ToolGlyph, ToolImage } from './ToolImage';
@@ -14,12 +14,39 @@ interface EditToolSheetProps {
   notify: (message: string, undo?: () => void) => void;
 }
 
+interface MoveDialogProps {
+  instance: ToolInstance | null;
+  toolName: string;
+  onPlan: () => void;
+  onComplete: () => void;
+  onCancel: () => void;
+}
+
+function MoveDialog({ instance, toolName, onPlan, onComplete, onCancel }: MoveDialogProps) {
+  if (!instance) return null;
+  const destination = otherHouse(instance.location);
+  return (
+    <div className="confirm-overlay" onClick={(event) => { event.stopPropagation(); onCancel(); }}>
+      <section className="move-dialog" role="dialog" aria-modal="true" aria-labelledby="move-dialog-title" onClick={(event) => event.stopPropagation()}>
+        <h2 id="move-dialog-title">Flytt {instance.label || toolName}</h2>
+        <p>Er eksemplaret allerede flyttet til {houseLabel(destination)}, eller skal flyttingen bare markeres som en oppgave?</p>
+        <div className="move-dialog-actions">
+          <button className="secondary-button" onClick={onCancel}>Avbryt</button>
+          <button className="secondary-button" onClick={onPlan}>Skal flyttes</button>
+          <button className="primary-button" onClick={onComplete}>Allerede flyttet</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function EditToolSheet({ tool, categories, currentHouse, onClose, notify }: EditToolSheetProps) {
   const { updateTool, putTool, deleteTool } = useApp();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Tool>(() => structuredClone(tool));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [instanceMenu, setInstanceMenu] = useState<string | null>(null);
+  const [moveCandidate, setMoveCandidate] = useState<ToolInstance | null>(null);
   const [imageBroken, setImageBroken] = useState(false);
 
   const heroImage = tool.image || tool.instances.find((instance) => instance.image)?.image || '';
@@ -38,11 +65,37 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
     notify(message, () => putTool(before));
   };
 
-  const moveInstance = (instance: ToolInstance) => {
+  const completeMove = (instance: ToolInstance) => {
+    const destination = instance.moveTo ?? otherHouse(instance.location);
+    const override = tool.needOverride[destination];
+    mutateTool(
+      {
+        instances: tool.instances.map((item) => item.id === instance.id ? { ...item, location: destination, moveTo: null } : item),
+        needOverride: {
+          ...tool.needOverride,
+          [destination]: typeof override === 'number' && override > 0 ? Math.max(0, override - 1) : override,
+        },
+      },
+      `${instance.label || tool.name} er flyttet til ${houseLabel(destination)}`
+    );
+    setInstanceMenu(null);
+    setMoveCandidate(null);
+  };
+
+  const planMove = (instance: ToolInstance) => {
     const destination = otherHouse(instance.location);
     mutateTool(
-      { instances: tool.instances.map((item) => item.id === instance.id ? { ...item, location: destination } : item) },
-      `${instance.label || tool.name} er flyttet til ${houseLabel(destination)}`
+      { instances: tool.instances.map((item) => item.id === instance.id ? { ...item, moveTo: destination } : item) },
+      `${instance.label || tool.name} er markert for flytting til ${houseLabel(destination)}`
+    );
+    setInstanceMenu(null);
+    setMoveCandidate(null);
+  };
+
+  const cancelMove = (instance: ToolInstance) => {
+    mutateTool(
+      { instances: tool.instances.map((item) => item.id === instance.id ? { ...item, moveTo: null } : item) },
+      'Den planlagte flyttingen er fjernet'
     );
     setInstanceMenu(null);
   };
@@ -126,7 +179,7 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
                     <div className="instance-editor-title"><HouseBadge house={instance.location} size={30} /><strong>Eksemplar {index + 1}</strong><button className="danger-text-button" onClick={() => setDraft({ ...draft, instances: draft.instances.filter((item) => item.id !== instance.id) })}>Fjern</button></div>
                     <div className="two-fields">
                       <div className="field"><label>Kjennetegn</label><input className="form-input" value={instance.label} onChange={(event) => patchInstance(instance.id, { label: event.target.value })} placeholder="F.eks. blått håndtak" /></div>
-                      <div className="field"><label>Hvor er den?</label><select className="form-input" value={instance.location} onChange={(event) => patchInstance(instance.id, { location: event.target.value as House })}>{HOUSES.map((house) => <option key={house} value={house}>{houseLabel(house)}</option>)}</select></div>
+                      <div className="field"><label>Hvor er den?</label><select className="form-input" value={instance.location} onChange={(event) => patchInstance(instance.id, { location: event.target.value as House, moveTo: null })}>{HOUSES.map((house) => <option key={house} value={house}>{houseLabel(house)}</option>)}</select></div>
                     </div>
                     <div className="field"><label>Bilde-URL</label><input className="form-input" type="url" value={instance.image} onChange={(event) => patchInstance(instance.id, { image: event.target.value })} placeholder="https://…" /></div>
                   </div>
@@ -180,11 +233,12 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
               {HOUSES.map((house) => {
                 const count = countAt(tool, house);
                 const need = effectiveNeed(tool, house);
+                const moving = pendingMoveCount(tool, house);
                 return (
                   <div className="status-row" key={house}>
                     <HouseBadge house={house} size={34} />
                     <span><strong>{houseLabel(house)}</strong><small>{count ? `${count} ${count === 1 ? 'eksemplar' : 'eksemplarer'}` : 'Ingen registrert'}{tool.needOverride[house] !== null ? ' · tilpasset behov' : ''}</small></span>
-                    {need ? <b className="need-tag">Kjøp {need}</b> : <b className="covered-tag">{count ? 'På plass ✓' : 'Ikke nødvendig'}</b>}
+                    {moving ? <b className="move-tag">Flytt {moving > 1 ? moving : ''}</b> : need ? <b className="need-tag">Kjøp {need}</b> : <b className="covered-tag">{count ? 'På plass ✓' : 'Ikke nødvendig'}</b>}
                     {!need && !count && tool.type === 'avansert' && house === 'osterliveien' && <button className="text-button" onClick={() => mutateTool({ needOverride: { ...tool.needOverride, [house]: 1 } }, `${tool.name} er lagt på handlelisten`)}>+ Handleliste</button>}
                   </div>
                 );
@@ -200,9 +254,18 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
                 {tool.instances.map((instance) => (
                   <article className="instance-card" key={instance.id}>
                     <div className="instance-image"><ToolImage src={instance.image} alt="" /></div>
-                    <div className="instance-copy"><strong>{instance.label || tool.name}</strong><small>{houseLabel(instance.location)}</small></div>
+                    <div className="instance-copy"><strong>{instance.label || tool.name}</strong><small>{houseLabel(instance.location)}{instance.moveTo ? ` → skal flyttes til ${houseLabel(instance.moveTo)}` : ''}</small></div>
                     <button className="instance-menu-button" onClick={() => setInstanceMenu(instanceMenu === instance.id ? null : instance.id)} aria-label={`Handlinger for ${instance.label || tool.name}`}>•••</button>
-                    {instanceMenu === instance.id && <div className="instance-popover"><button onClick={() => moveInstance(instance)}>Flytt til {houseLabel(otherHouse(instance.location))}</button><button onClick={() => { startEditing(); setInstanceMenu(null); }}>Rediger eksemplar</button><button className="danger" onClick={() => removeInstance(instance)}>Slett eksemplar</button></div>}
+                    {instanceMenu === instance.id && <div className="instance-popover">
+                      {instance.moveTo ? (
+                        <>
+                          <button onClick={() => completeMove(instance)}>Marker som flyttet til {houseLabel(instance.moveTo!)}</button>
+                          <button onClick={() => cancelMove(instance)}>Avbryt planlagt flytting</button>
+                        </>
+                      ) : <button onClick={() => { setMoveCandidate(instance); setInstanceMenu(null); }}>Flytt til {houseLabel(otherHouse(instance.location))}</button>}
+                      <button onClick={() => { startEditing(); setInstanceMenu(null); }}>Rediger eksemplar</button>
+                      <button className="danger" onClick={() => removeInstance(instance)}>Slett eksemplar</button>
+                    </div>}
                   </article>
                 ))}
               </div>
@@ -211,6 +274,7 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
           <button className="primary-button full-button detail-edit-button" onClick={startEditing}>Rediger verktøy</button>
           <p className="detail-owner-note">Nye eksemplarer plasseres hos {housePerson(currentHouse)} som standard.</p>
         </div>
+        <MoveDialog instance={moveCandidate} toolName={tool.name} onPlan={() => moveCandidate && planMove(moveCandidate)} onComplete={() => moveCandidate && completeMove(moveCandidate)} onCancel={() => setMoveCandidate(null)} />
       </section>
     </div>
   );

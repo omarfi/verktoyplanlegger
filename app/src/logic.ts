@@ -23,6 +23,11 @@ export function countAt(tool: Tool, house: House): number {
   return tool.instances.filter((i) => i.location === house).length;
 }
 
+/** Eksemplarer som er markert for, men ikke bekreftet flyttet til huset. */
+export function pendingMoveCount(tool: Tool, house: House): number {
+  return tool.instances.filter((instance) => instance.moveTo === house).length;
+}
+
 /**
  * Utledet behov: Raschs Vei trenger 1 når beholdningen er 0 (begge typer);
  * Østerliveien trenger 1 kun for basisverktøy (avansert skal bare finnes
@@ -82,7 +87,7 @@ export function normalize(value = ''): string {
 
 export function matchesIntent(tool: Tool, intent: ViewIntent, selectedHouses: House[]): boolean {
   const houses = selectedHouses.length ? selectedHouses : HOUSES;
-  if (intent === 'handleliste') return houses.some((house) => effectiveNeed(tool, house) > 0);
+  if (intent === 'handleliste') return houses.some((house) => effectiveNeed(tool, house) > 0 || pendingMoveCount(tool, house) > 0);
   if (intent === 'har') return houses.some((house) => countAt(tool, house) > 0);
   return true;
 }
@@ -135,10 +140,14 @@ export function shoppingListText(tools: Tool[], selectedHouses: House[]): string
   const houses = selectedHouses.length ? selectedHouses : HOUSES;
   const sections = houses
     .map((house) => {
-      const rows = tools
-        .map((tool) => ({ tool, amount: effectiveNeed(tool, house) }))
-        .filter(({ amount }) => amount > 0)
-        .map(({ tool, amount }) => `• ${tool.name}${amount > 1 ? ` ×${amount}` : ''}`);
+      const rows = tools.flatMap((tool) => {
+        const moving = pendingMoveCount(tool, house);
+        const buying = Math.max(0, effectiveNeed(tool, house) - moving);
+        return [
+          ...(moving ? [`• Flytt ${tool.name}${moving > 1 ? ` ×${moving}` : ''}`] : []),
+          ...(buying ? [`• Kjøp ${tool.name}${buying > 1 ? ` ×${buying}` : ''}`] : []),
+        ];
+      });
       return rows.length ? `${houseLabel(house)}:\n${rows.join('\n')}` : '';
     })
     .filter(Boolean);

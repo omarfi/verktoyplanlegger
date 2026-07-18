@@ -32,6 +32,10 @@ function normalizeInstances(arr: unknown[]): ToolInstance[] {
     location: i.location === 'osterliveien' ? 'osterliveien' : 'raschsvei',
     image: i.image ?? '',
     label: i.label ?? '',
+    moveTo:
+      (i.moveTo === 'osterliveien' || i.moveTo === 'raschsvei') && i.moveTo !== i.location
+        ? i.moveTo
+        : null,
   }));
 }
 

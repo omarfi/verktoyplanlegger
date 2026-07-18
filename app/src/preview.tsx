@@ -17,8 +17,8 @@ function avatar(letter: string, bg: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-function inst(location: House, image = '', label = ''): ToolInstance {
-  return { id: generateId(), location, image, label };
+function inst(location: House, image = '', label = '', moveTo: House | null = null): ToolInstance {
+  return { id: generateId(), location, image, label, moveTo };
 }
 
 function sample(partial: Partial<Tool> & Pick<Tool, 'name' | 'category'>): Tool {
@@ -40,8 +40,8 @@ const SAMPLE_TOOLS: Tool[] = [
   // Generell thumbnail, men ingen eksemplarer disponert noe sted.
   sample({ name: 'Momentnøkkel', category: 'Nøkler', type: 'avansert', image: svgThumb('Moment', '#6b4e71'), instances: [] }),
   sample({ name: 'Laservater', category: 'Måleverktøy', type: 'avansert', instances: [inst('raschsvei', svgThumb('Laser', '#c05746'))] }),
-  sample({ name: 'Tommestokk', category: 'Måleverktøy', instances: [inst('osterliveien', svgThumb('Tommestokk', '#f18f01'))] }),
-  sample({ name: 'Målebånd IKEA', category: 'Måleverktøy', instances: [inst('raschsvei', svgThumb('IKEA', '#f6a21e'))] }),
+  sample({ name: 'Tommestokk', category: 'Måleverktøy', instances: [inst('osterliveien', svgThumb('Tommestokk', '#f18f01'), '', 'raschsvei')] }),
+  sample({ name: 'Målebånd IKEA', category: 'Måleverktøy', image: svgThumb('Generell', '#738290'), instances: [inst('raschsvei', svgThumb('IKEA', '#f6a21e'))] }),
   sample({ name: 'Målebånd 8m', category: 'Måleverktøy', instances: [inst('osterliveien', svgThumb('Probuilder', '#e08e0b'))] }),
   sample({ name: 'Universaltang', category: 'Tenger', needOverride: { osterliveien: 2, raschsvei: null }, instances: [inst('raschsvei', svgThumb('Tang 1', '#2f6690')), inst('raschsvei', svgThumb('Tang 2', '#3a7ca5'))] }),
   sample({ name: 'Håndsag', category: 'Skjæreverktøy', needOverride: { osterliveien: null, raschsvei: 0 }, instances: [inst('osterliveien', svgThumb('Sag', '#5b8e7d'))] }),
