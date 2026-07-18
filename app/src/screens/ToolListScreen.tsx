@@ -11,6 +11,7 @@ import {
   houseLabel,
   housePerson,
   matchesIntent,
+  pendingMoveCount,
   shoppingListText,
   toolMatchesSearch,
   type ViewIntent,
@@ -23,6 +24,8 @@ import { AddToolModal } from '../components/AddToolModal';
 import { MergeDialog } from '../components/MergeDialog';
 import { HouseBadge } from '../components/HouseBadge';
 import { ToolGlyph } from '../components/ToolImage';
+import { InstanceDetailsDialog } from '../components/InstanceDetailsDialog';
+import { HouseActionDialog } from '../components/HouseActionDialog';
 
 const VIEW_KEY = 'verktoyplanlegger:view:v2';
 
@@ -44,6 +47,12 @@ interface Notice {
   undo?: () => void;
 }
 
+interface PendingAcquisition {
+  toolId: string;
+  fixedHouse: House | null;
+  houseOptions: House[];
+}
+
 export function ToolListScreen() {
   const { tools, loading, updateTool, putTool, deleteTool, mergeTools } = useApp();
   const { user, logOut, signIn, signingIn, authError, currentHouse: authHouse } = useAuth();
@@ -61,6 +70,8 @@ export function ToolListScreen() {
   const [showMerge, setShowMerge] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [pendingAcquisition, setPendingAcquisition] = useState<PendingAcquisition | null>(null);
+  const [pendingMoveToolId, setPendingMoveToolId] = useState<string | null>(null);
   const noticeTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -95,6 +106,8 @@ export function ToolListScreen() {
   }, [filtered, allCategories]);
 
   const selectedTool = selectedToolId ? tools.find((tool) => tool.id === selectedToolId) ?? null : null;
+  const acquisitionTool = pendingAcquisition ? tools.find((tool) => tool.id === pendingAcquisition.toolId) ?? null : null;
+  const pendingMoveTool = pendingMoveToolId ? tools.find((tool) => tool.id === pendingMoveToolId) ?? null : null;
   const selectedTools = tools.filter((tool) => selectedIds.has(tool.id));
 
   const duplicatePair = useMemo(() => {
@@ -143,36 +156,53 @@ export function ToolListScreen() {
     setShowMerge(false);
   };
 
-  const markPurchased = (tool: Tool) => {
-    const scope = houses.length ? houses : [currentHouse];
-    const destination = scope.find((house) => effectiveNeed(tool, house) > 0) ?? HOUSES.find((house) => effectiveNeed(tool, house) > 0);
-    if (!destination) return;
+  const beginAcquisition = (tool: Tool) => {
+    const scope = houses.length ? houses : HOUSES;
+    const houseOptions = scope.filter((house) => effectiveNeed(tool, house) - pendingMoveCount(tool, house) > 0);
+    if (!houseOptions.length) return;
+    setPendingAcquisition({
+      toolId: tool.id,
+      fixedHouse: houses.length === 1 ? houses[0] : null,
+      houseOptions,
+    });
+  };
+
+  const markAcquired = (tool: Tool, destination: House, label: string, image: string) => {
     const before = structuredClone(tool);
     const override = tool.needOverride[destination];
     updateTool(tool.id, {
-      instances: [...tool.instances, { id: generateId(), location: destination, image: tool.image, label: 'Nyinnkjøpt' }],
+      instances: [...tool.instances, { id: generateId(), location: destination, image, label }],
       needOverride: {
         ...tool.needOverride,
         [destination]: typeof override === 'number' && override > 0 ? Math.max(0, override - 1) : override,
       },
     });
+    setPendingAcquisition(null);
     notify(`${tool.name} er lagt til hos ${houseLabel(destination)}`, () => putTool(before));
   };
 
-  const markMoved = (tool: Tool, instanceId: string) => {
-    const instance = tool.instances.find((item) => item.id === instanceId);
-    const destination = instance?.moveTo;
+  const markMoved = (tool: Tool, destination: House) => {
+    const instance = tool.instances.find((item) => item.moveTo === destination);
     if (!instance || !destination) return;
     const before = structuredClone(tool);
     const override = tool.needOverride[destination];
     updateTool(tool.id, {
-      instances: tool.instances.map((item) => item.id === instanceId ? { ...item, location: destination, moveTo: null } : item),
+      instances: tool.instances.map((item) => item.id === instance.id ? { ...item, location: destination, moveTo: null } : item),
       needOverride: {
         ...tool.needOverride,
         [destination]: typeof override === 'number' && override > 0 ? Math.max(0, override - 1) : override,
       },
     });
+    setPendingMoveToolId(null);
     notify(`${instance.label || tool.name} er flyttet til ${houseLabel(destination)}`, () => putTool(before));
+  };
+
+  const beginMoveCompletion = (tool: Tool) => {
+    if (houses.length === 1) {
+      markMoved(tool, houses[0]);
+      return;
+    }
+    setPendingMoveToolId(tool.id);
   };
 
   const shareList = async () => {
@@ -250,8 +280,8 @@ export function ToolListScreen() {
                       selected={selectedIds.has(tool.id)}
                       onClick={() => toggleSelected(tool)}
                       onLongPress={() => void requireWrite(() => enterSelectMode(tool))}
-                      onPurchased={() => void requireWrite(() => markPurchased(tool))}
-                      onMoved={(instanceId) => void requireWrite(() => markMoved(tool, instanceId))}
+                      onAcquired={() => void requireWrite(() => beginAcquisition(tool))}
+                      onMoved={() => void requireWrite(() => beginMoveCompletion(tool))}
                     />
                   ))}</div>}
                 </section>
@@ -297,6 +327,25 @@ export function ToolListScreen() {
       )}
 
       {selectedTool && <EditToolSheet key={selectedTool.id} tool={selectedTool} categories={allCategories} currentHouse={currentHouse} onClose={() => setSelectedToolId(null)} notify={notify} />}
+
+      {acquisitionTool && pendingAcquisition && <InstanceDetailsDialog
+        open
+        toolName={acquisitionTool.name}
+        fixedHouse={pendingAcquisition.fixedHouse}
+        houseOptions={pendingAcquisition.houseOptions}
+        confirmLabel="Anskaffet"
+        onConfirm={({ house, label, image }) => markAcquired(acquisitionTool, house, label, image)}
+        onCancel={() => setPendingAcquisition(null)}
+      />}
+
+      <HouseActionDialog
+        open={Boolean(pendingMoveTool)}
+        title={`Marker ${pendingMoveTool?.name ?? 'verktøyet'} som flyttet`}
+        message="Hvilken adresse gjelder handlingen?"
+        houses={pendingMoveTool ? HOUSES.filter((house) => pendingMoveCount(pendingMoveTool, house) > 0) : []}
+        onChoose={(house) => pendingMoveTool && markMoved(pendingMoveTool, house)}
+        onCancel={() => setPendingMoveToolId(null)}
+      />
 
       {notice && <div className="snackbar" role="status"><span>{notice.message}</span>{notice.undo && <button onClick={() => void requireWrite(() => { notice.undo?.(); setNotice(null); })}>Angre</button>}<button aria-label="Lukk melding" onClick={() => setNotice(null)}>×</button></div>}
     </div>

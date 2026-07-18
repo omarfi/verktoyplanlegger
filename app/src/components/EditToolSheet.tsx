@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { Tool, ToolInstance, House, ToolType } from '../types';
 import { useApp, useAuth } from '../context';
-import { HOUSES, countAt, derivedNeed, effectiveNeed, generateId, houseLabel, housePerson, otherHouse, pendingMoveCount } from '../logic';
+import { HOUSES, countAt, derivedNeed, effectiveNeed, generateId, houseLabel, otherHouse, pendingMoveCount } from '../logic';
 import { HouseBadge } from './HouseBadge';
 import { ConfirmDialog } from './Modal';
 import { ToolGlyph, ToolImage } from './ToolImage';
+import { InstanceDetailsDialog } from './InstanceDetailsDialog';
 
 interface EditToolSheetProps {
   tool: Tool;
@@ -48,6 +49,7 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [instanceMenu, setInstanceMenu] = useState<string | null>(null);
   const [moveCandidate, setMoveCandidate] = useState<ToolInstance | null>(null);
+  const [addInstanceHouse, setAddInstanceHouse] = useState<House | null>(null);
   const [imageBroken, setImageBroken] = useState(false);
 
   const heroImage = tool.image || tool.instances.find((instance) => instance.image)?.image || '';
@@ -74,6 +76,29 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
       updateTool(tool.id, updates);
       notify(message, () => putTool(before));
     });
+  };
+
+  const addToShoppingList = (house: House) => {
+    const nextNeed = effectiveNeed(tool, house) + 1;
+    mutateTool(
+      { needOverride: { ...tool.needOverride, [house]: nextNeed } },
+      `${tool.name} er lagt til på handlelisten for ${houseLabel(house)}`
+    );
+  };
+
+  const addInstance = ({ house, label, image }: { house: House; label: string; image: string }) => {
+    const override = tool.needOverride[house];
+    mutateTool(
+      {
+        instances: [...tool.instances, { id: generateId(), location: house, image, label }],
+        needOverride: {
+          ...tool.needOverride,
+          [house]: typeof override === 'number' && override > 0 ? Math.max(0, override - 1) : override,
+        },
+      },
+      `${tool.name} er lagt til i beholdningen hos ${houseLabel(house)}`
+    );
+    setAddInstanceHouse(null);
   };
 
   const completeMove = (instance: ToolInstance) => {
@@ -240,8 +265,7 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
       <section className="detail-sheet" role="dialog" aria-modal="true" aria-labelledby="detail-sheet-title" onClick={(event) => event.stopPropagation()}>
         <div className="sheet-grabber" />
         <header className="detail-sheet-header">
-          <div><h2 id="detail-sheet-title">{tool.name}</h2><p>{tool.category} · {tool.type === 'avansert' ? 'Avansert' : 'Grunnleggende'}</p></div>
-          <button className="icon-button" onClick={startEditing} aria-label={`Rediger ${tool.name}`}>✎</button>
+          <div><div className="detail-title-line"><h2 id="detail-sheet-title">{tool.name}</h2>{tool.type === 'avansert' && <span className="detail-type-tag">Avansert</span>}</div><p>{tool.category}</p></div>
           <button className="icon-button" onClick={onClose} aria-label="Lukk">×</button>
         </header>
         <div className="detail-sheet-body">
@@ -256,14 +280,20 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
                 return (
                   <div className="status-row" key={house}>
                     <HouseBadge house={house} size={34} />
-                    <span><strong>{houseLabel(house)}</strong><small>{count ? `${count} ${count === 1 ? 'eksemplar' : 'eksemplarer'}` : 'Ingen registrert'}{tool.needOverride[house] !== null ? ' · tilpasset behov' : ''}</small></span>
-                    {moving ? <b className="move-tag">Flytt {moving > 1 ? moving : ''}</b> : need ? <b className="need-tag">Kjøp {need}</b> : <b className="covered-tag">{count ? 'På plass ✓' : 'Ikke nødvendig'}</b>}
-                    {!need && !count && tool.type === 'avansert' && house === 'osterliveien' && <button className="text-button" onClick={() => mutateTool({ needOverride: { ...tool.needOverride, [house]: 1 } }, `${tool.name} er lagt på handlelisten`)}>+ Handleliste</button>}
+                    <div className="status-copy">
+                      <div className="status-summary">
+                        <span><strong>{houseLabel(house)}</strong>{count > 0 && <small>{count} {count === 1 ? 'eksemplar' : 'eksemplarer'}</small>}</span>
+                        {moving ? <b className="move-tag">Flytt {moving > 1 ? moving : ''}</b> : need ? <b className="need-tag">Kjøp {need}</b> : <b className="covered-tag">{count ? 'På plass ✓' : 'Ikke nødvendig'}</b>}
+                      </div>
+                      <div className="status-actions">
+                        <button className="quick-status-action" onClick={() => addToShoppingList(house)}>+ Handleliste</button>
+                        <button className="quick-status-action" onClick={() => void requireWrite(() => setAddInstanceHouse(house))}>+ Beholdning</button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
-            {tool.type === 'avansert' && <p className="policy-note">Avanserte verktøy trengs normalt bare i Raschs Vei. Dette kan tilpasses per hus i redigering.</p>}
           </section>
           {tool.notes && <section className="detail-section"><h3>Notater</h3><p className="notes-copy">{tool.notes}</p></section>}
           <section className="detail-section">
@@ -291,9 +321,15 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
             ) : <p className="hint-text">Ingen eksemplarer er registrert ennå.</p>}
           </section>
           <button className="primary-button full-button detail-edit-button" onClick={startEditing}>Rediger verktøy</button>
-          <p className="detail-owner-note">Nye eksemplarer plasseres hos {housePerson(currentHouse)} som standard.</p>
         </div>
         <MoveDialog instance={moveCandidate} toolName={tool.name} onPlan={() => moveCandidate && planMove(moveCandidate)} onComplete={() => moveCandidate && completeMove(moveCandidate)} onCancel={() => setMoveCandidate(null)} />
+        {addInstanceHouse && <InstanceDetailsDialog
+          open
+          toolName={tool.name}
+          fixedHouse={addInstanceHouse}
+          onConfirm={addInstance}
+          onCancel={() => setAddInstanceHouse(null)}
+        />}
       </section>
     </div>
   );

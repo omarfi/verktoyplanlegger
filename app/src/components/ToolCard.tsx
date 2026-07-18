@@ -12,8 +12,8 @@ interface ToolCardProps {
   selected?: boolean;
   selectedHouses: House[];
   shopping?: boolean;
-  onPurchased?: () => void;
-  onMoved?: (instanceId: string) => void;
+  onAcquired?: () => void;
+  onMoved?: () => void;
 }
 
 function cardImages(tool: Tool): string[] {
@@ -48,7 +48,7 @@ export function ToolCard({
   selected = false,
   selectedHouses,
   shopping = false,
-  onPurchased,
+  onAcquired,
   onMoved,
 }: ToolCardProps) {
   const timer = useRef<number | null>(null);
@@ -127,8 +127,8 @@ export function ToolCard({
       </button>
       {shopping && (pendingInstance || need > 0) && (
         <div className="tool-card-actions">
-          {pendingInstance && onMoved && <button className="moved-button" onClick={() => onMoved(pendingInstance.id)}>Flyttet ✓</button>}
-          {need > 0 && onPurchased && <button className="purchased-button" onClick={onPurchased}>Kjøpt ✓</button>}
+          {pendingInstance && onMoved && <button className="moved-button" onClick={onMoved}><span aria-hidden="true">✓</span> Flyttet</button>}
+          {need > 0 && onAcquired && <button className="acquired-button" onClick={onAcquired}><span aria-hidden="true">✓</span> Anskaffet</button>}
         </div>
       )}
     </article>
