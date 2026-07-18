@@ -152,9 +152,7 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  object-fit: cover;
-  color: white;
-  font-weight: 700;
+  overflow: hidden;
   flex-shrink: 0;
   line-height: 1;
   user-select: none;
@@ -163,7 +161,7 @@ body {
 .house-badge-osterliveien { background: var(--house-p); }
 .house-badge-raschsvei { background: var(--house-o); }
 
-img.house-badge { background: var(--neutral-bg); }
+.house-badge img { display: block; }
 
 /* ── Category groups ── */
 
