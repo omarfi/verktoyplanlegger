@@ -61,6 +61,9 @@ button, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .brand p { margin: 0 0 2px; color: var(--green-dark); font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .brand h1 { margin: 0; overflow: hidden; font-size: 20px; letter-spacing: -.45px; text-overflow: ellipsis; white-space: nowrap; }
 .profile-button { display: grid; place-items: center; width: 44px; height: 44px; padding: 3px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+.header-login-button { min-height: 40px; padding: 0 14px; border: 1px solid var(--green-dark); border-radius: 999px; background: #fff; color: var(--green-dark); font-size: 12.5px; font-weight: 800; cursor: pointer; }
+.header-login-button:disabled { cursor: wait; opacity: .65; }
+.auth-notice { width: min(calc(100% - 32px), 720px); margin: 10px auto 0; padding: 10px 12px; border: 1px solid #f0caca; border-radius: 10px; background: var(--red-soft); color: #8d2c2c; font-size: 12.5px; text-align: center; }
 .profile-menu { position: absolute; right: clamp(16px, 4vw, 28px); top: 61px; z-index: 80; width: 250px; padding: 7px; border: 1px solid var(--line); border-radius: 13px; background: #fff; box-shadow: var(--shadow-overlay); }
 .profile-menu > button, .profile-summary { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; }
 .profile-menu > button { cursor: pointer; }

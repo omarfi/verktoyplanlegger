@@ -5,7 +5,7 @@ import type { Tool, ToolType, House, NewToolInput, SyncStatus } from './types';
 export interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  signIn: () => Promise<void>;
+  signIn: () => Promise<boolean>;
   logOut: () => Promise<void>;
   authError: string | null;
   signingIn: boolean;

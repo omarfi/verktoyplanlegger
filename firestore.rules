@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthorizedWriter() {
+      return request.auth != null
+        && request.auth.token.email in [
+          'omar1490@gmail.com',
+          'ilyas.narvesen@gmail.com'
+        ];
+    }
+
+    // Selve verktøylisten og avatarene er offentlige lesedata.
+    match /tools/{toolId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthorizedWriter();
+    }
+
+    match /meta/avatars {
+      allow read: if true;
+      allow write: if isAuthorizedWriter();
+    }
+
+    // Migreringsmetadata og eldre samlinger er kun tilgjengelige for
+    // de autoriserte brukerne som kan vedlikeholde databasen.
+    match /meta/{document=**} {
+      allow read, write: if isAuthorizedWriter();
+    }
+
+    match /kits/{document=**} {
+      allow read, write: if isAuthorizedWriter();
+    }
+  }
+}

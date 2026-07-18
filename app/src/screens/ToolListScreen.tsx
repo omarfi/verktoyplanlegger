@@ -46,8 +46,9 @@ interface Notice {
 
 export function ToolListScreen() {
   const { tools, loading, updateTool, putTool, deleteTool, mergeTools } = useApp();
-  const { logOut, currentHouse: authHouse } = useAuth();
+  const { user, logOut, signIn, signingIn, authError, currentHouse: authHouse } = useAuth();
   const currentHouse = authHouse ?? 'raschsvei';
+  const canWrite = Boolean(user && authHouse);
   const initial = useMemo(() => readView(), []);
   const [intent, setIntent] = useState<ViewIntent>(initial.intent);
   const [houses, setHouses] = useState<House[]>(initial.houses);
@@ -106,7 +107,15 @@ export function ToolListScreen() {
 
   const setViewIntent = (next: ViewIntent) => {
     setIntent(next);
-    if (next === 'handleliste' && houses.length === 0) setHouses([currentHouse]);
+    if (next === 'handleliste' && houses.length === 0 && authHouse) setHouses([authHouse]);
+  };
+
+  const requireWrite = async (action: () => void) => {
+    if (canWrite) {
+      action();
+      return;
+    }
+    if (await signIn()) action();
   };
 
   const toggleSelected = (tool: Tool) => {
@@ -185,8 +194,10 @@ export function ToolListScreen() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand"><p>Delt verktøyliste</p><h1>Verktøyplanlegger</h1></div>
-          <button className="profile-button" onClick={() => setProfileOpen((value) => !value)} aria-expanded={profileOpen} aria-label="Åpne profilmeny"><HouseBadge house={currentHouse} size={38} /></button>
-          {profileOpen && (
+          {canWrite ? <button className="profile-button" onClick={() => setProfileOpen((value) => !value)} aria-expanded={profileOpen} aria-label="Åpne profilmeny"><HouseBadge house={currentHouse} size={38} /></button> : (
+            <button className="header-login-button" onClick={() => void signIn()} disabled={signingIn}>{signingIn ? 'Logger inn…' : 'Logg inn'}</button>
+          )}
+          {canWrite && profileOpen && (
             <div className="profile-menu">
               <div className="profile-summary"><HouseBadge house={currentHouse} size={34} /><span><strong>{housePerson(currentHouse)}</strong><small>{houseLabel(currentHouse)}</small></span></div>
               <button onClick={logOut}>Logg ut</button>
@@ -194,6 +205,8 @@ export function ToolListScreen() {
           )}
         </div>
       </header>
+
+      {authError && <div className="auth-notice" role="alert">{authError}</div>}
 
       <main className="workspace" id="main">
         <section className="control-panel" aria-label="Søk og filtrering">
@@ -212,7 +225,7 @@ export function ToolListScreen() {
         ) : (
           <>
             {duplicatePair && !selectMode && (
-              <aside className="duplicate-banner"><span>◇</span><span><strong>Disse ligner på hverandre</strong>{duplicatePair[0].name} og {duplicatePair[1].name}</span><button onClick={() => { setSelectedIds(new Set(duplicatePair.map((tool) => tool.id))); setSelectMode(true); setShowMerge(true); }}>Slå sammen</button></aside>
+              <aside className="duplicate-banner"><span>◇</span><span><strong>Disse ligner på hverandre</strong>{duplicatePair[0].name} og {duplicatePair[1].name}</span><button onClick={() => void requireWrite(() => { setSelectedIds(new Set(duplicatePair.map((tool) => tool.id))); setSelectMode(true); setShowMerge(true); })}>Slå sammen</button></aside>
             )}
             {grouped.map(([category, categoryTools]) => {
               const isCollapsed = collapsed.has(category);
@@ -236,9 +249,9 @@ export function ToolListScreen() {
                       selectMode={selectMode}
                       selected={selectedIds.has(tool.id)}
                       onClick={() => toggleSelected(tool)}
-                      onLongPress={() => enterSelectMode(tool)}
-                      onPurchased={() => markPurchased(tool)}
-                      onMoved={(instanceId) => markMoved(tool, instanceId)}
+                      onLongPress={() => void requireWrite(() => enterSelectMode(tool))}
+                      onPurchased={() => void requireWrite(() => markPurchased(tool))}
+                      onMoved={(instanceId) => void requireWrite(() => markMoved(tool, instanceId))}
                     />
                   ))}</div>}
                 </section>
@@ -251,7 +264,7 @@ export function ToolListScreen() {
         )}
       </main>
 
-      {!selectMode ? <button className="add-tool-fab" onClick={() => setShowAddTool(true)}><span>+</span><b>Legg til</b></button> : (
+      {!selectMode ? <button className="add-tool-fab" onClick={() => void requireWrite(() => setShowAddTool(true))} aria-label={canWrite ? 'Legg til verktøy' : 'Logg inn for å legge til verktøy'}><span>+</span><b>{canWrite ? 'Legg til' : 'Logg inn'}</b></button> : (
         <div className="selection-bar"><strong>{selectedIds.size} valgt</strong><button onClick={exitSelectMode}>Avslutt</button><button className="primary-button" disabled={selectedIds.size < 2} onClick={() => setShowMerge(true)}>Slå sammen</button></div>
       )}
 
@@ -285,7 +298,7 @@ export function ToolListScreen() {
 
       {selectedTool && <EditToolSheet key={selectedTool.id} tool={selectedTool} categories={allCategories} currentHouse={currentHouse} onClose={() => setSelectedToolId(null)} notify={notify} />}
 
-      {notice && <div className="snackbar" role="status"><span>{notice.message}</span>{notice.undo && <button onClick={() => { notice.undo?.(); setNotice(null); }}>Angre</button>}<button aria-label="Lukk melding" onClick={() => setNotice(null)}>×</button></div>}
+      {notice && <div className="snackbar" role="status"><span>{notice.message}</span>{notice.undo && <button onClick={() => void requireWrite(() => { notice.undo?.(); setNotice(null); })}>Angre</button>}<button aria-label="Lukk melding" onClick={() => setNotice(null)}>×</button></div>}
     </div>
   );
 }

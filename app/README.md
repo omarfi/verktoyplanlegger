@@ -18,10 +18,12 @@ npm run build
 
 ## Data og synk
 
-- Google-innlogging er begrenset til de to godkjente kontoene i `src/store.tsx`.
+- Verktøylisten og avatarene kan leses uten innlogging.
+- Alle skriveoperasjoner krever Google-innlogging med en av de to godkjente kontoene i `src/store.tsx`.
+- `firestore.rules` håndhever offentlig lesing og e-postbegrenset skriving i backend; reglene deployes med `firebase deploy --only firestore:rules`.
 - Firestore-samlingen `tools` er sannhetskilden for v4-verktøymodellen.
 - `src/migration.ts` normaliserer eldre dokumenter og beskytter mot spøkelseseksemplarer.
-- Firestore bruker vedvarende flerfane-cache. Headeren viser `Lagrer`, `Lagret`, `Frakoblet` eller `Synkfeil`.
+- Firestore bruker vedvarende flerfane-cache.
 - Skjemaer redigerer lokale utkast og skriver først når brukeren lagrer.
 - PWA-shell og service worker gjør appflaten tilgjengelig uten nett; Firestore køer endringer.
 
@@ -32,4 +34,4 @@ npm run build
 - Hurtigregistrering med eier, bilde, kategoriforslag og duplikatvern.
 - Separat lese- og redigeringsmodus med bilde-URL-forhåndsvisning.
 - Ett-trykks `Kjøpt ✓`, delbar handleliste og angre på mutasjoner.
-- Langtrykk eller profilmeny for sammenslåing; alle bilder, notater, behov og eksemplarer bevares.
+- Langtrykk eller duplikatvarselet starter sammenslåing; alle bilder, notater, behov og eksemplarer bevares.

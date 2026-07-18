@@ -5,15 +5,19 @@ import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'fire
 import { auth, db, googleProvider } from './firebase';
 import { migrateTool, runMigration } from './migration';
 import { generateId } from './logic';
-import { AuthContext, AppContext, type AppContextValue } from './context';
+import { AuthContext, AppContext, useAuth, type AppContextValue } from './context';
 
 const EMAIL_TO_HOUSE: Record<string, House> = {
   'omar1490@gmail.com': 'raschsvei',
   'ilyas.narvesen@gmail.com': 'osterliveien',
 };
 
-const ACCESS_ERROR = 'Kun autoriserte Google-konti har tilgang.';
+const ACCESS_ERROR = 'Kun Omar og Ilyas kan logge inn og gjøre endringer.';
 const avatarsDoc = doc(db, 'meta', 'avatars');
+
+function isAuthorizedUser(user: User | null): boolean {
+  return Boolean(user?.email && EMAIL_TO_HOUSE[user.email]);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -44,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signIn = async () => {
+  const signIn = async (): Promise<boolean> => {
     setAuthError(null);
     setSigningIn(true);
     try {
@@ -52,9 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!result.user.email || !EMAIL_TO_HOUSE[result.user.email]) {
         await signOut(auth);
         setAuthError(ACCESS_ERROR);
+        return false;
       }
+      return true;
     } catch (error: unknown) {
       setAuthError(error instanceof Error ? error.message : 'Innlogging feilet');
+      return false;
     } finally {
       setSigningIn(false);
     }
@@ -80,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 const toolsCol = collection(db, 'tools');
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(navigator.onLine ? 'loading' : 'offline');
@@ -145,12 +153,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (loading || migrationAttempted.current) return;
+    if (!isAuthorizedUser(user) || loading || migrationAttempted.current) return;
     migrationAttempted.current = true;
     runMigration(tools).catch((error) => console.error('Migrering til v4 feilet:', error));
-  }, [loading, tools]);
+  }, [loading, tools, user]);
+
+  const canWrite = () => isAuthorizedUser(auth.currentUser);
 
   const updateTool = (id: string, updates: Partial<Tool>): Tool | null => {
+    if (!canWrite()) return null;
     const existing = tools.find((tool) => tool.id === id);
     if (!existing) return null;
     const updated = { ...existing, ...updates };
@@ -160,6 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const putTool = (tool: Tool) => {
+    if (!canWrite()) return;
     setTools((current) => {
       const exists = current.some((item) => item.id === tool.id);
       return exists ? current.map((item) => (item.id === tool.id ? tool : item)) : [...current, tool];
@@ -168,6 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addTool = (input: NewToolInput): Tool => {
+    if (!canWrite()) throw new Error('Innlogging kreves for å legge til verktøy.');
     const tool: Tool = {
       id: generateId(),
       name: input.name,
@@ -187,11 +200,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteTool = (id: string) => {
+    if (!canWrite()) return;
     setTools((current) => current.filter((tool) => tool.id !== id));
     trackWrite(deleteDoc(doc(toolsCol, id)));
   };
 
   const mergeTools: AppContextValue['mergeTools'] = (ids, meta) => {
+    if (!canWrite()) return null;
     if (ids.length < 2) return null;
     const selected = ids
       .map((id) => tools.find((tool) => tool.id === id))

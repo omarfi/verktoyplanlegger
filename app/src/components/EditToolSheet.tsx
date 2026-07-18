@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Tool, ToolInstance, House, ToolType } from '../types';
-import { useApp } from '../context';
+import { useApp, useAuth } from '../context';
 import { HOUSES, countAt, derivedNeed, effectiveNeed, generateId, houseLabel, housePerson, otherHouse, pendingMoveCount } from '../logic';
 import { HouseBadge } from './HouseBadge';
 import { ConfirmDialog } from './Modal';
@@ -42,6 +42,7 @@ function MoveDialog({ instance, toolName, onPlan, onComplete, onCancel }: MoveDi
 
 export function EditToolSheet({ tool, categories, currentHouse, onClose, notify }: EditToolSheetProps) {
   const { updateTool, putTool, deleteTool } = useApp();
+  const { user, signIn, currentHouse: authHouse } = useAuth();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Tool>(() => structuredClone(tool));
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -52,6 +53,14 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
   const heroImage = tool.image || tool.instances.find((instance) => instance.image)?.image || '';
   const categoryOptions = useMemo(() => [...new Set([...categories, draft.category])], [categories, draft.category]);
 
+  const requireWrite = async (action: () => void) => {
+    if (user && authHouse) {
+      action();
+      return;
+    }
+    if (await signIn()) action();
+  };
+
   const patchInstance = (id: string, patch: Partial<ToolInstance>) => {
     setDraft((current) => ({
       ...current,
@@ -60,9 +69,11 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
   };
 
   const mutateTool = (updates: Partial<Tool>, message: string) => {
-    const before = structuredClone(tool);
-    updateTool(tool.id, updates);
-    notify(message, () => putTool(before));
+    void requireWrite(() => {
+      const before = structuredClone(tool);
+      updateTool(tool.id, updates);
+      notify(message, () => putTool(before));
+    });
   };
 
   const completeMove = (instance: ToolInstance) => {
@@ -108,34 +119,42 @@ export function EditToolSheet({ tool, categories, currentHouse, onClose, notify 
   const saveDraft = () => {
     const trimmed = draft.name.trim();
     if (!trimmed) return;
-    const before = structuredClone(tool);
-    updateTool(tool.id, { ...draft, name: trimmed });
-    setEditing(false);
-    notify('Endringene er lagret', () => putTool(before));
+    void requireWrite(() => {
+      const before = structuredClone(tool);
+      updateTool(tool.id, { ...draft, name: trimmed });
+      setEditing(false);
+      notify('Endringene er lagret', () => putTool(before));
+    });
   };
 
   const startEditing = () => {
-    setDraft(structuredClone(tool));
-    setEditing(true);
+    void requireWrite(() => {
+      setDraft(structuredClone(tool));
+      setEditing(true);
+    });
   };
 
   const requestDelete = () => {
-    if (tool.instances.length) {
-      setConfirmDelete(true);
-      return;
-    }
-    const before = structuredClone(tool);
-    deleteTool(tool.id);
-    onClose();
-    notify(`${tool.name} er slettet`, () => putTool(before));
+    void requireWrite(() => {
+      if (tool.instances.length) {
+        setConfirmDelete(true);
+        return;
+      }
+      const before = structuredClone(tool);
+      deleteTool(tool.id);
+      onClose();
+      notify(`${tool.name} er slettet`, () => putTool(before));
+    });
   };
 
   const confirmToolDelete = () => {
-    const before = structuredClone(tool);
-    setConfirmDelete(false);
-    deleteTool(tool.id);
-    onClose();
-    notify(`${tool.name} og ${tool.instances.length} eksemplarer er slettet`, () => putTool(before));
+    void requireWrite(() => {
+      const before = structuredClone(tool);
+      setConfirmDelete(false);
+      deleteTool(tool.id);
+      onClose();
+      notify(`${tool.name} og ${tool.instances.length} eksemplarer er slettet`, () => putTool(before));
+    });
   };
 
   const pasteImage = async () => {

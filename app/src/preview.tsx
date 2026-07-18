@@ -1,8 +1,8 @@
 // Kun for utvikling: ?preview rendrer appen med eksempeldata i minnet i
 // stedet for Firestore, slik at layouten kan sjekkes uten innlogging.
 import { useState, type ReactNode } from 'react';
-import { AppContext, type AppContextValue } from './context';
-import { AuthProvider } from './store';
+import type { User } from 'firebase/auth';
+import { AppContext, AuthContext, type AppContextValue } from './context';
 import { ToolListScreen } from './screens/ToolListScreen';
 import type { Tool, ToolInstance, House, NewToolInput } from './types';
 import { generateId } from './logic';
@@ -99,12 +99,31 @@ function PreviewAppProvider({ children }: { children: ReactNode }) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
+function PreviewAuthProvider({ children }: { children: ReactNode }) {
+  const startAsGuest = new URLSearchParams(window.location.search).has('guest');
+  const [signedIn, setSignedIn] = useState(!startAsGuest);
+  const previewUser = signedIn ? ({ email: 'omar1490@gmail.com' } as User) : null;
+  return (
+    <AuthContext.Provider value={{
+      user: previewUser,
+      loading: false,
+      signingIn: false,
+      signIn: async () => { setSignedIn(true); return true; },
+      logOut: async () => setSignedIn(false),
+      authError: null,
+      currentHouse: signedIn ? 'raschsvei' : null,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
 export default function PreviewApp() {
   return (
-    <AuthProvider>
+    <PreviewAuthProvider>
       <PreviewAppProvider>
         <ToolListScreen />
       </PreviewAppProvider>
-    </AuthProvider>
+    </PreviewAuthProvider>
   );
 }
