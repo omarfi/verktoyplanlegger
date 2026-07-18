@@ -45,7 +45,7 @@ interface Notice {
 }
 
 export function ToolListScreen() {
-  const { tools, loading, syncStatus, updateTool, putTool, deleteTool, mergeTools } = useApp();
+  const { tools, loading, updateTool, putTool, deleteTool, mergeTools } = useApp();
   const { logOut, currentHouse: authHouse } = useAuth();
   const currentHouse = authHouse ?? 'raschsvei';
   const initial = useMemo(() => readView(), []);
@@ -164,14 +164,11 @@ export function ToolListScreen() {
     }
   };
 
-  const syncLabel = syncStatus === 'saving' ? 'Lagrer…' : syncStatus === 'offline' ? 'Frakoblet' : syncStatus === 'error' ? 'Synkfeil' : syncStatus === 'loading' ? 'Kobler til…' : 'Lagret ✓';
-
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand"><p>Delt verktøyliste</p><h1>Verktøyplanlegger</h1></div>
-          <div className={`sync-chip ${syncStatus}`} title="Firestore-synkstatus"><i />{syncLabel}</div>
           <button className="profile-button" onClick={() => setProfileOpen((value) => !value)} aria-expanded={profileOpen} aria-label="Åpne profilmeny"><HouseBadge house={currentHouse} size={38} /></button>
           {profileOpen && (
             <div className="profile-menu">
@@ -199,13 +196,10 @@ export function ToolListScreen() {
           <div className="skeleton-grid" aria-label="Laster verktøy">{Array.from({ length: 8 }, (_, index) => <div className="skeleton" key={index} />)}</div>
         ) : (
           <>
-            {grouped.length > 0 && <nav className="category-rail" aria-label="Hopp til kategori">{grouped.map(([category]) => <button key={category} onClick={() => document.getElementById(`category-${encodeURIComponent(category)}`)?.scrollIntoView({ behavior: 'smooth' })}>{category}</button>)}</nav>}
             {duplicatePair && !selectMode && (
               <aside className="duplicate-banner"><span>◇</span><span><strong>Disse ligner på hverandre</strong>{duplicatePair[0].name} og {duplicatePair[1].name}</span><button onClick={() => { setSelectedIds(new Set(duplicatePair.map((tool) => tool.id))); setSelectMode(true); setShowMerge(true); }}>Slå sammen</button></aside>
             )}
             {grouped.map(([category, categoryTools]) => {
-              const scope = houses.length ? houses : HOUSES;
-              const needCount = categoryTools.reduce((sum, tool) => sum + scope.reduce((houseSum, house) => houseSum + effectiveNeed(tool, house), 0), 0);
               const isCollapsed = collapsed.has(category);
               return (
                 <section className="category-section" id={`category-${encodeURIComponent(category)}`} key={category}>
@@ -216,7 +210,7 @@ export function ToolListScreen() {
                       aria-label={`${isCollapsed ? 'Vis' : 'Skjul'} ${category}`}
                       onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(category)) next.delete(category); else next.add(category); return next; })}
                     >⌄</button>
-                    <h2>{category}</h2>{needCount > 0 && <span>{needCount} på handlelisten</span>}
+                    <h2>{category}</h2>
                   </div>
                   {!isCollapsed && <div className="tool-grid">{categoryTools.map((tool) => (
                     <ToolCard

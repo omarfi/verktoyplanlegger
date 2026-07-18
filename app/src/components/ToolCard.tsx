@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { Tool, House } from '../types';
-import { HOUSES, countAt, effectiveNeed } from '../logic';
+import { HOUSES, countAt, effectiveNeed, houseLabel } from '../logic';
 import { HouseBadge } from './HouseBadge';
 import { ToolImage } from './ToolImage';
 
@@ -27,9 +27,14 @@ export function ToolCard({
 }: ToolCardProps) {
   const timer = useRef<number | null>(null);
   const longPressed = useRef(false);
-  const ownedHouses = HOUSES.filter((house) => countAt(tool, house) > 0);
+  const ownedHouses = HOUSES
+    .map((house) => ({ house, count: countAt(tool, house) }))
+    .filter(({ count }) => count > 0);
   const scope = selectedHouses.length ? selectedHouses : HOUSES;
-  const need = scope.reduce((sum, house) => sum + effectiveNeed(tool, house), 0);
+  const needs = scope
+    .map((house) => ({ house, count: effectiveNeed(tool, house) }))
+    .filter(({ count }) => count > 0);
+  const need = needs.reduce((sum, item) => sum + item.count, 0);
   const image = tool.instances.find((instance) => instance.image)?.image || tool.image;
 
   const startPress = () => {
@@ -47,8 +52,6 @@ export function ToolCard({
     <article className={`tool-card ${selected ? 'selected' : ''}`}>
       {selectMode ? (
         <span className="select-check" aria-hidden="true">{selected ? '✓' : ''}</span>
-      ) : tool.instances.length > 1 ? (
-        <span className="count-bubble" aria-label={`${tool.instances.length} eksemplarer`}>{tool.instances.length}</span>
       ) : null}
       <button
         className="tool-card-hit"
@@ -63,13 +66,22 @@ export function ToolCard({
         aria-label={`${selectMode ? (selected ? 'Fjern' : 'Velg') : 'Åpne'} ${tool.name}`}
       >
         <div className="tool-card-image"><ToolImage src={image} alt="" /></div>
-        <div className="ownership-badges" aria-label={ownedHouses.length ? 'Finnes hos registrerte eiere' : 'Ingen har den'}>
-          {ownedHouses.map((house) => <HouseBadge key={house} house={house} size={31} />)}
+        <div className="ownership-badges" aria-label={ownedHouses.length ? 'Beholdning hos registrerte eiere' : 'Ingen har den'}>
+          {ownedHouses.map(({ house, count }) => (
+            <span className="ownership-badge" key={house} aria-label={`${count} stk hos ${houseLabel(house)}`}>
+              <HouseBadge house={house} size={44} />
+              <span className="ownership-count" aria-hidden="true">{count}</span>
+            </span>
+          ))}
         </div>
         <div className="tool-card-copy">
           <h3>{tool.name}</h3>
-          <p>{tool.type === 'avansert' ? 'Avansert' : 'Grunnleggende'}{tool.instances.length ? ` · ${tool.instances.length} stk` : ''}</p>
-          {need > 0 && <strong>Kjøp {need} stk</strong>}
+          {tool.type === 'avansert' && <span className="tool-type-tag">Avansert</span>}
+          {needs.length > 0 && (
+            <div className="tool-need-list">
+              {needs.map(({ house, count }) => <strong key={house}>Kjøp {count} stk til {houseLabel(house)}</strong>)}
+            </div>
+          )}
         </div>
       </button>
       {shopping && need > 0 && onPurchased && (
