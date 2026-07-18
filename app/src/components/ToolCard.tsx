@@ -17,17 +17,27 @@ interface ToolCardProps {
 }
 
 function cardImages(tool: Tool): string[] {
-  if (tool.instances.length === 0) return [tool.image];
+  const unique = (images: string[]) => {
+    const seen = new Set<string>();
+    const result = images
+      .map((image) => image.trim())
+      .filter((image) => {
+        if (!image || seen.has(image)) return false;
+        seen.add(image);
+        return true;
+      });
+    return result.length ? result : [''];
+  };
+
+  const generalImage = tool.image.trim();
+  if (tool.instances.length === 0) return unique([generalImage]);
 
   if (tool.instances.length === 1) {
     const instanceImage = tool.instances[0].image.trim();
-    const generalImage = tool.image.trim();
-    if (!instanceImage || instanceImage === generalImage) return [generalImage || instanceImage];
-    if (!generalImage) return [instanceImage];
-    return [generalImage, instanceImage];
+    return unique([generalImage, instanceImage]);
   }
 
-  return tool.instances.slice(0, 2).map((instance) => instance.image.trim() || tool.image.trim());
+  return unique(tool.instances.slice(0, 2).map((instance) => instance.image.trim() || generalImage));
 }
 
 export function ToolCard({
@@ -96,7 +106,7 @@ export function ToolCard({
           {ownedHouses.map(({ house, count }) => (
             <span className="ownership-badge" key={house} aria-label={`${count} stk hos ${houseLabel(house)}`}>
               <HouseBadge house={house} size={44} />
-              <span className="ownership-count" aria-hidden="true">{count}</span>
+              {count > 1 && <span className="ownership-count" aria-hidden="true">{count}</span>}
             </span>
           ))}
         </div>
