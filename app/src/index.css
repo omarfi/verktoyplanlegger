@@ -136,10 +136,11 @@ button, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .tool-move-list, .tool-need-list { display: grid; gap: 3px; margin-top: 7px; }
 .tool-move-list strong { display: block; color: var(--green-dark); font-size: 11.5px; line-height: 1.25; }
 .tool-need-list strong { display: block; color: var(--red); font-size: 11.5px; line-height: 1.25; }
-.tool-card-actions { display: grid; gap: 6px; padding: 0 8px 8px; }
-.acquired-button, .moved-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 46px; border: 2px solid var(--green-dark); border-radius: 10px; background: var(--green); color: #fff; box-shadow: 0 2px 5px rgb(0 88 61 / 22%); font-size: 13px; font-weight: 850; cursor: pointer; }
-.acquired-button:hover, .moved-button:hover { background: var(--green-dark); }
-.acquired-button span, .moved-button span { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgb(255 255 255 / 20%); }
+.tool-card-actions { display: grid; gap: 6px; padding: 0 10px 10px; }
+.checkoff-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid #b7e3d3; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-size: 13px; font-weight: 720; letter-spacing: -.1px; cursor: pointer; transition: background .15s, border-color .15s, color .15s, transform .1s; }
+.checkoff-button:hover { background: var(--green); border-color: var(--green); color: #fff; }
+.checkoff-button:active { transform: translateY(1px); }
+.checkoff-button svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .duplicate-banner { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #d8cfee; border-radius: 12px; background: #f3effb; color: #4f3b82; font-size: 13px; }
 .duplicate-banner strong { display: block; color: #37275f; }
 .duplicate-banner button { margin-left: auto; min-height: 40px; border: 0; background: transparent; color: var(--violet); font-weight: 800; cursor: pointer; }

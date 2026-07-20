@@ -4,6 +4,12 @@ import { HOUSES, countAt, effectiveNeed, houseLabel, pendingMoveCount } from '..
 import { HouseBadge } from './HouseBadge';
 import { ToolImage } from './ToolImage';
 
+const CheckIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12.5 10 17.5 19 6.5" />
+  </svg>
+);
+
 interface ToolCardProps {
   tool: Tool;
   onClick: () => void;
@@ -127,8 +133,8 @@ export function ToolCard({
       </button>
       {shopping && (pendingInstance || need > 0) && (
         <div className="tool-card-actions">
-          {pendingInstance && onMoved && <button className="moved-button" onClick={onMoved}><span aria-hidden="true">✓</span> Flyttet</button>}
-          {need > 0 && onAcquired && <button className="acquired-button" onClick={onAcquired}><span aria-hidden="true">✓</span> Anskaffet</button>}
+          {pendingInstance && onMoved && <button className="checkoff-button" onClick={onMoved}><CheckIcon /> Flyttet</button>}
+          {need > 0 && onAcquired && <button className="checkoff-button" onClick={onAcquired}><CheckIcon /> Anskaffet</button>}
         </div>
       )}
     </article>
