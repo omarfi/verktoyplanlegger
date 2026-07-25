@@ -26,6 +26,7 @@ import { HouseBadge } from '../components/HouseBadge';
 import { ToolGlyph } from '../components/ToolImage';
 import { InstanceDetailsDialog } from '../components/InstanceDetailsDialog';
 import { HouseActionDialog } from '../components/HouseActionDialog';
+import { runRaschsveiImport } from '../raschsveiImport';
 
 const VIEW_KEY = 'verktoyplanlegger:view:v2';
 
@@ -205,6 +206,17 @@ export function ToolListScreen() {
     setPendingMoveToolId(tool.id);
   };
 
+  const importRaschsveiInventory = () => {
+    const result = runRaschsveiImport(tools, putTool);
+    setProfileOpen(false);
+    if (result.report.length) console.log('Import Raschs Vei:\n' + result.report.join('\n'));
+    if (result.writes === 0) {
+      notify('Beholdningen er allerede oppdatert – ingen endringer');
+      return;
+    }
+    notify(`Import ferdig: ${result.created} nye, ${result.writes - result.created} oppdatert, ${result.unchanged} uendret`);
+  };
+
   const shareList = async () => {
     const text = shoppingListText(tools, houses);
     try {
@@ -230,6 +242,7 @@ export function ToolListScreen() {
           {canWrite && profileOpen && (
             <div className="profile-menu">
               <div className="profile-summary"><HouseBadge house={currentHouse} size={34} /><span><strong>{housePerson(currentHouse)}</strong><small>{houseLabel(currentHouse)}</small></span></div>
+              {currentHouse === 'raschsvei' && <button onClick={importRaschsveiInventory}>Importer beholdning (Raschs Vei)</button>}
               <button onClick={logOut}>Logg ut</button>
             </div>
           )}

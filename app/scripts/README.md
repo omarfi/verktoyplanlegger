@@ -7,24 +7,20 @@ på Raschs Vei.
 ## Filer
 
 - `raschsvei-inventory.json` – den menneskelesbare planen (treff + nye verktøy).
-- `import-raschsvei-inventory.mjs` – idempotent importskript som skriver planen
-  til Firestore.
+- Importlogikken (samme plan) ligger i appen: `src/raschsveiImport.ts`.
 
 ## Kjøring
 
-Skriving krever Google-innlogging som `omar1490@gmail.com` (samme regel som
-appen, håndhevet i `firestore.rules`). Kjør derfor skriptet fra en **autorisert
-Firebase-origin** – enklest den publiserte appen:
+Importen kjøres direkte i appen mens Omar er innlogget:
 
-1. Åpne den publiserte appen i nettleseren.
-2. Åpne DevTools-konsollen.
-3. Kjør: `import('/verktoyplanlegger/scripts/import-raschsvei-inventory.mjs')`
-   – eller lim inn hele filens innhold i konsollen.
-4. Godkjenn Omar-kontoen i Google-popup-en.
+1. Logg inn som `omar1490@gmail.com`.
+2. Åpne profilmenyen (avataren øverst til høyre).
+3. Trykk **«Importer beholdning (Raschs Vei)»**.
 
-Skriptet er **idempotent**: det topper opp beholdningen på Raschs Vei til
-måltallet i planen i stedet for å legge til blindt, så det er trygt å kjøre
-flere ganger. Alt skrives i én batch.
+Knappen gjenbruker appens egen innlogging og Firestore-skriving, så du slipper
+konsollen. Den er **idempotent**: den topper opp beholdningen på Raschs Vei til
+måltallet i planen i stedet for å legge til blindt, så den er trygg å trykke på
+flere ganger. En detaljert rapport logges til DevTools-konsollen.
 
 ## Omforming og dedup-logikk
 
