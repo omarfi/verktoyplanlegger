@@ -1,0 +1,283 @@
+{
+  "location": "raschsvei",
+  "matches": [
+    {
+      "id": "sheet-tommestokk-1m",
+      "name": "Tommestokk",
+      "target": 1
+    },
+    {
+      "id": "tool-3",
+      "name": "Vater (kort)",
+      "target": 1,
+      "label": "Gult"
+    },
+    {
+      "id": "sheet-vater-600mm",
+      "name": "Vater lang",
+      "target": 1,
+      "label": "Blått"
+    },
+    {
+      "id": "tool-6",
+      "name": "Skyvelære",
+      "target": 1
+    },
+    {
+      "id": "tool-12",
+      "name": "Snekkerblyant",
+      "target": 4,
+      "note": "Ca. 4 blyanter (estimert)"
+    },
+    {
+      "id": "tool-21",
+      "name": "Bitsholder med bitsett",
+      "target": 1,
+      "label": "Kort skrutrekker / bitsholder"
+    },
+    {
+      "id": "tool-22",
+      "name": "Skiftenøkkel",
+      "target": 1
+    },
+    {
+      "id": "tool-24",
+      "name": "Kombinasjonsnøkler",
+      "target": 10,
+      "note": "Ca. 10 i ulike størrelser (estimert)"
+    },
+    {
+      "id": "tool-26",
+      "name": "Unbrakonøkkel",
+      "target": 1,
+      "label": "Sammenleggbart sett"
+    },
+    {
+      "id": "sheet-pipenoekkelsett",
+      "name": "Pipenøkkelsett",
+      "target": 1,
+      "note": "Sett med ca. 13–15 piper"
+    },
+    {
+      "id": "sheet-bits-og-borsett",
+      "name": "Bits og borsett",
+      "target": 2,
+      "labels": [
+        "Løse bor, assortert (tre/metall/mur)",
+        "Metabo borsett (koffert)"
+      ]
+    },
+    {
+      "id": "tool-49",
+      "name": "Saks",
+      "target": 1
+    },
+    {
+      "id": "tool-42",
+      "name": "Håndsag",
+      "target": 1,
+      "label": "Kort / beskjæringssag"
+    },
+    {
+      "id": "tool-43",
+      "name": "Baufil",
+      "target": 1
+    },
+    {
+      "id": "tool-48",
+      "name": "Platesaks",
+      "target": 1,
+      "label": "Blikksaks, grønt håndtak"
+    },
+    {
+      "id": "tool-50",
+      "name": "Hullsag",
+      "target": 2,
+      "labels": [
+        "Hullsagsett (flere størrelser)",
+        "Stor hullsag (kan tilhøre settet)"
+      ]
+    },
+    {
+      "id": "tool-52",
+      "name": "Hammer",
+      "target": 1,
+      "label": "Snekkerhammer"
+    },
+    {
+      "id": "tool-58",
+      "name": "Brekkjern",
+      "target": 1
+    },
+    {
+      "id": "tool-51",
+      "name": "Meisel",
+      "target": 1,
+      "label": "Flatmeisel / brytejern"
+    },
+    {
+      "id": "tool-36",
+      "name": "Hurtigtvinge",
+      "target": 4,
+      "note": "Ca. 4 (estimert)"
+    },
+    {
+      "id": "tool-69",
+      "name": "Avisoleringstang",
+      "target": 1,
+      "label": "Oransje/svart, med krympefunksjon"
+    }
+  ],
+  "news": [
+    {
+      "name": "Målebånd 50 m (glassfiber)",
+      "category": "Måleverktøy",
+      "type": "avansert",
+      "count": 1,
+      "note": "Glassfibermålebånd på snelle"
+    },
+    {
+      "name": "Mini-libelle",
+      "category": "Måleverktøy",
+      "type": "avansert",
+      "count": 1,
+      "note": "Liten løs vaterlibelle"
+    },
+    {
+      "name": "Skrutrekkere (assortert)",
+      "category": "Skrutrekkere og bits",
+      "type": "avansert",
+      "count": 3,
+      "note": "Ulike størrelser"
+    },
+    {
+      "name": "Vinkeladapter (90°) for bits/drill",
+      "category": "Skrutrekkere og bits",
+      "type": "avansert",
+      "count": 1,
+      "note": "90-graders adapter"
+    },
+    {
+      "name": "Spesialnøkler (små)",
+      "category": "Nøkler",
+      "type": "avansert",
+      "count": 3,
+      "note": "Ulike typer"
+    },
+    {
+      "name": "Skrallenøkkel",
+      "category": "Nøkler",
+      "type": "avansert",
+      "count": 1
+    },
+    {
+      "name": "Pipehåndtak langt / brytejern",
+      "category": "Nøkler",
+      "type": "avansert",
+      "count": 1
+    },
+    {
+      "name": "Pipeforlengere",
+      "category": "Nøkler",
+      "type": "avansert",
+      "count": 3,
+      "note": "Ca. 3 (estimert)"
+    },
+    {
+      "name": "Flatbor (tre)",
+      "category": "Skrutrekkere og bits",
+      "type": "avansert",
+      "count": 2
+    },
+    {
+      "name": "Rasp-/fresebits (roterende)",
+      "category": "Skrutrekkere og bits",
+      "type": "avansert",
+      "count": 7,
+      "note": "Ca. 7 (estimert)"
+    },
+    {
+      "name": "Fliseborsett (glass/flis)",
+      "category": "Skrutrekkere og bits",
+      "type": "avansert",
+      "count": 1,
+      "note": "4 bor i rød eske"
+    },
+    {
+      "name": "Langt spesialbor",
+      "category": "Skrutrekkere og bits",
+      "type": "avansert",
+      "count": 1,
+      "note": "Ligger i verktøykassen"
+    },
+    {
+      "name": "Batteridrill / skrutrekker",
+      "category": "Elektroverktøy",
+      "type": "avansert",
+      "count": 1,
+      "label": "DeWalt"
+    },
+    {
+      "name": "Stikksag",
+      "category": "Elektroverktøy",
+      "type": "avansert",
+      "count": 1,
+      "label": "DeWalt"
+    },
+    {
+      "name": "Eksentersliper",
+      "category": "Elektroverktøy",
+      "type": "avansert",
+      "count": 1,
+      "label": "DeWalt"
+    },
+    {
+      "name": "Kabel-/platesaks",
+      "category": "Skjæreverktøy",
+      "type": "avansert",
+      "count": 1,
+      "note": "Rødt/svart håndtak; nøyaktig type usikker"
+    },
+    {
+      "name": "Plastrørkutter",
+      "category": "Skjæreverktøy",
+      "type": "avansert",
+      "count": 1,
+      "label": "Oransje"
+    },
+    {
+      "name": "Stiftepistol",
+      "category": "Slagverktøy",
+      "type": "avansert",
+      "count": 1,
+      "note": "Manuell"
+    },
+    {
+      "name": "Fjærklemme",
+      "category": "Klemmer og tvinger",
+      "type": "avansert",
+      "count": 4,
+      "note": "Ca. 4 (estimert)"
+    },
+    {
+      "name": "Nettverkstester",
+      "category": "Elektrisk håndverktøy",
+      "type": "avansert",
+      "count": 1
+    },
+    {
+      "name": "RJ45-krympetang",
+      "category": "Elektrisk håndverktøy",
+      "type": "avansert",
+      "count": 1,
+      "label": "Blått/svart håndtak"
+    },
+    {
+      "name": "Uidentifisert blått spesialverktøy",
+      "category": "Annet",
+      "type": "avansert",
+      "count": 1,
+      "note": "Langt blått håndverktøy med flere metallruller; funksjon ikke bekreftet"
+    }
+  ]
+}
