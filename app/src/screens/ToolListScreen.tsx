@@ -11,14 +11,20 @@ import {
   houseLabel,
   housePerson,
   matchesIntent,
+  matchesShoppingFilter,
   pendingMoveCount,
+  purchaseNeed,
   shoppingListText,
+  shoppingSummary,
   toolMatchesSearch,
+  type ShoppingFilter,
   type ViewIntent,
 } from '../logic';
 import type { Tool, House } from '../types';
 import { ToolCard } from '../components/ToolCard';
 import { FilterBar } from '../components/FilterBar';
+import { ShoppingFilterBar } from '../components/ShoppingFilterBar';
+import { ShoppingListTable, type ShoppingGroup } from '../components/ShoppingListTable';
 import { EditToolSheet } from '../components/EditToolSheet';
 import { AddToolModal } from '../components/AddToolModal';
 import { MergeDialog } from '../components/MergeDialog';
@@ -30,16 +36,17 @@ import { runRaschsveiImport } from '../raschsveiImport';
 
 const VIEW_KEY = 'verktoyplanlegger:view:v2';
 
-function readView(): { intent: ViewIntent; houses: House[]; collapsed: string[] } {
+function readView(): { intent: ViewIntent; houses: House[]; collapsed: string[]; shoppingFilter: ShoppingFilter } {
   try {
     const saved = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}');
     return {
       intent: ['alle', 'handleliste', 'har'].includes(saved.intent) ? saved.intent : 'alle',
       houses: Array.isArray(saved.houses) ? saved.houses.filter((house: string) => HOUSES.includes(house as House)) : [],
       collapsed: Array.isArray(saved.collapsed) ? saved.collapsed : [],
+      shoppingFilter: ['alle', 'kjop', 'flytt', 'senere'].includes(saved.shoppingFilter) ? saved.shoppingFilter : 'alle',
     };
   } catch {
-    return { intent: 'alle', houses: [], collapsed: [] };
+    return { intent: 'alle', houses: [], collapsed: [], shoppingFilter: 'alle' };
   }
 }
 
@@ -62,6 +69,7 @@ export function ToolListScreen() {
   const initial = useMemo(() => readView(), []);
   const [intent, setIntent] = useState<ViewIntent>(initial.intent);
   const [houses, setHouses] = useState<House[]>(initial.houses);
+  const [shoppingFilter, setShoppingFilter] = useState<ShoppingFilter>(initial.shoppingFilter);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(initial.collapsed));
   const [showAddTool, setShowAddTool] = useState(false);
@@ -76,8 +84,8 @@ export function ToolListScreen() {
   const noticeTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(VIEW_KEY, JSON.stringify({ intent, houses, collapsed: [...collapsed] }));
-  }, [intent, houses, collapsed]);
+    localStorage.setItem(VIEW_KEY, JSON.stringify({ intent, houses, collapsed: [...collapsed], shoppingFilter }));
+  }, [intent, houses, collapsed, shoppingFilter]);
 
   useEffect(() => () => {
     if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
@@ -105,6 +113,37 @@ export function ToolListScreen() {
     filtered.forEach((tool) => map.set(tool.category, [...(map.get(tool.category) ?? []), tool]));
     return allCategories.filter((category) => map.has(category)).map((category) => [category, map.get(category)!] as const);
   }, [filtered, allCategories]);
+
+  // Handlelisten som tabell: oppsummer hvert verktøy og del inn i kjøp/flytt/senere.
+  const shoppingSummaries = useMemo(
+    () => filtered.map((tool) => ({ tool, summary: shoppingSummary(tool, houses) })),
+    [filtered, houses]
+  );
+
+  const shoppingCounts = useMemo(() => {
+    const counts: Record<ShoppingFilter, number> = { alle: 0, kjop: 0, flytt: 0, senere: 0 };
+    shoppingSummaries.forEach(({ summary }) => {
+      (['alle', 'kjop', 'flytt', 'senere'] as ShoppingFilter[]).forEach((key) => {
+        if (matchesShoppingFilter(summary, key)) counts[key] += 1;
+      });
+    });
+    return counts;
+  }, [shoppingSummaries]);
+
+  const shoppingGroups = useMemo<ShoppingGroup[]>(() => {
+    const map = new Map<string, ShoppingGroup['rows']>();
+    shoppingSummaries
+      .filter(({ summary }) => matchesShoppingFilter(summary, shoppingFilter))
+      .forEach((row) => map.set(row.tool.category, [...(map.get(row.tool.category) ?? []), row]));
+    return allCategories
+      .filter((category) => map.has(category))
+      .map((category) => ({ category, rows: map.get(category)! }));
+  }, [shoppingSummaries, shoppingFilter, allCategories]);
+
+  const shoppingCount = useMemo(
+    () => shoppingGroups.reduce((total, group) => total + group.rows.length, 0),
+    [shoppingGroups]
+  );
 
   const selectedTool = selectedToolId ? tools.find((tool) => tool.id === selectedToolId) ?? null : null;
   const acquisitionTool = pendingAcquisition ? tools.find((tool) => tool.id === pendingAcquisition.toolId) ?? null : null;
@@ -198,6 +237,24 @@ export function ToolListScreen() {
     notify(`${instance.label || tool.name} er flyttet til ${houseLabel(destination)}`, () => putTool(before));
   };
 
+  const postponeTool = (tool: Tool) => {
+    const scope = houses.length ? houses : HOUSES;
+    const before = structuredClone(tool);
+    const postponed = { ...tool.postponed };
+    scope.forEach((house) => { if (purchaseNeed(tool, house) > 0) postponed[house] = true; });
+    updateTool(tool.id, { postponed });
+    notify(`${tool.name} er flyttet til «Kjøp senere»`, () => putTool(before));
+  };
+
+  const resumeTool = (tool: Tool) => {
+    const scope = houses.length ? houses : HOUSES;
+    const before = structuredClone(tool);
+    const postponed = { ...tool.postponed };
+    scope.forEach((house) => { postponed[house] = false; });
+    updateTool(tool.id, { postponed });
+    notify(`${tool.name} er tilbake i handlelisten`, () => putTool(before));
+  };
+
   const beginMoveCompletion = (tool: Tool) => {
     if (houses.length === 1) {
       markMoved(tool, houses[0]);
@@ -260,16 +317,32 @@ export function ToolListScreen() {
             {search && <button onClick={() => setSearch('')} aria-label="Tøm søk">×</button>}
           </div>
           <FilterBar intent={intent} houses={houses} onIntentChange={setViewIntent} onHousesChange={setHouses} />
-          <div className="result-meta"><span>{filtered.length} av {tools.length} verktøy</span>{intent === 'handleliste' && filtered.length > 0 && <button className="text-button" onClick={shareList}>↥ Del handlelisten</button>}</div>
+          {intent === 'handleliste' && <ShoppingFilterBar value={shoppingFilter} counts={shoppingCounts} onChange={setShoppingFilter} />}
+          <div className="result-meta"><span>{intent === 'handleliste' ? `${shoppingCount} gjøremål` : `${filtered.length} av ${tools.length} verktøy`}</span>{intent === 'handleliste' && shoppingCounts.alle > 0 && <button className="text-button" onClick={shareList}>↥ Del handlelisten</button>}</div>
         </section>
 
         {loading ? (
           <div className="skeleton-grid" aria-label="Laster verktøy">{Array.from({ length: 8 }, (_, index) => <div className="skeleton" key={index} />)}</div>
         ) : (
           <>
-            {duplicatePair && !selectMode && (
+            {duplicatePair && !selectMode && intent !== 'handleliste' && (
               <aside className="duplicate-banner"><span>◇</span><span><strong>Disse ligner på hverandre</strong>{duplicatePair[0].name} og {duplicatePair[1].name}</span><button onClick={() => void requireWrite(() => { setSelectedIds(new Set(duplicatePair.map((tool) => tool.id))); setSelectMode(true); setShowMerge(true); })}>Slå sammen</button></aside>
             )}
+            {intent === 'handleliste' ? (
+              shoppingGroups.length > 0 ? (
+                <ShoppingListTable
+                  groups={shoppingGroups}
+                  onOpen={(tool) => setSelectedToolId(tool.id)}
+                  onAcquired={(tool) => void requireWrite(() => beginAcquisition(tool))}
+                  onMoved={(tool) => void requireWrite(() => beginMoveCompletion(tool))}
+                  onPostpone={(tool) => void requireWrite(() => postponeTool(tool))}
+                  onResume={(tool) => void requireWrite(() => resumeTool(tool))}
+                />
+              ) : (
+                <section className="empty-state"><div><ToolGlyph /></div><h2>{search ? `Ingen treff på «${search}»` : shoppingFilter === 'senere' ? 'Ingenting er utsatt til senere' : shoppingFilter === 'kjop' ? 'Ingenting å kjøpe akkurat nå' : shoppingFilter === 'flytt' ? 'Ingenting skal flyttes akkurat nå' : `Handlelisten er tom${houses.length === 1 ? ` for ${housePerson(houses[0])}` : ''}`}</h2><p>{search ? 'Prøv et annet navn, eller tøm søket.' : 'Bytt filter for å se resten av gjøremålene.'}</p><button className="secondary-button" onClick={() => { setSearch(''); setShoppingFilter('alle'); }}>Vis hele handlelisten</button></section>
+              )
+            ) : (
+            <>
             {grouped.map(([category, categoryTools]) => {
               const isCollapsed = collapsed.has(category);
               return (
@@ -288,7 +361,6 @@ export function ToolListScreen() {
                       key={tool.id}
                       tool={tool}
                       selectedHouses={houses}
-                      shopping={intent === 'handleliste'}
                       selectMode={selectMode}
                       selected={selectedIds.has(tool.id)}
                       onClick={() => toggleSelected(tool)}
@@ -301,7 +373,9 @@ export function ToolListScreen() {
               );
             })}
             {grouped.length === 0 && (
-              <section className="empty-state"><div><ToolGlyph /></div><h2>{search ? `Ingen treff på «${search}»` : intent === 'handleliste' ? `Handlelisten er tom${houses.length === 1 ? ` for ${housePerson(houses[0])}` : ''}` : 'Ingen verktøy i denne visningen'}</h2><p>{search ? 'Prøv et annet navn, eller tøm søket.' : 'Bytt filter for å se resten av verktøyene.'}</p><button className="secondary-button" onClick={() => { setSearch(''); setIntent('alle'); setHouses([]); }}>Vis alle verktøy</button></section>
+              <section className="empty-state"><div><ToolGlyph /></div><h2>{search ? `Ingen treff på «${search}»` : 'Ingen verktøy i denne visningen'}</h2><p>{search ? 'Prøv et annet navn, eller tøm søket.' : 'Bytt filter for å se resten av verktøyene.'}</p><button className="secondary-button" onClick={() => { setSearch(''); setIntent('alle'); setHouses([]); }}>Vis alle verktøy</button></section>
+            )}
+            </>
             )}
           </>
         )}

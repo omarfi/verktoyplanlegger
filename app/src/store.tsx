@@ -191,6 +191,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? [{ id: generateId(), location: input.owner, image: input.image ?? '', label: '' }]
         : [],
       needOverride: { osterliveien: null, raschsvei: null },
+      postponed: { osterliveien: false, raschsvei: false },
       notes: input.notes ?? '',
       v: 4,
     };
@@ -231,6 +232,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           survivor.needOverride.raschsvei ??
           selected.find((tool) => tool.needOverride.raschsvei !== null)?.needOverride.raschsvei ??
           null,
+      },
+      postponed: {
+        osterliveien: selected.some((tool) => tool.postponed?.osterliveien),
+        raschsvei: selected.some((tool) => tool.postponed?.raschsvei),
       },
     };
     const removedIds = selected.filter((tool) => tool.id !== survivor.id).map((tool) => tool.id);

@@ -30,8 +30,10 @@ npm run build
 ## Viktige brukerflyter
 
 - `Alle`, `Handleliste` og `Har` med egne person-/hustoggles.
+- `Handleliste` vises som kompakt tabell med små thumbnails, og et eget underfilter (`Alle` / `Kjøp` / `Flytt` / `Kjøp senere`) skiller det som skal kjøpes fra det som skal flyttes.
+- `Kjøp senere` utsetter et gjøremål; det skjules fra den aktive listen til det hentes tilbake med `Til handlelisten`.
 - Avatarbasert eierskap og behov i vanlig språk på kort og detaljark.
 - Hurtigregistrering med eier, bilde, kategoriforslag og duplikatvern.
 - Separat lese- og redigeringsmodus med bilde-URL-forhåndsvisning.
-- Ett-trykks `Kjøpt ✓`, delbar handleliste og angre på mutasjoner.
+- Ett-trykks `Anskaffet`/`Flyttet ✓`, delbar handleliste og angre på mutasjoner.
 - Langtrykk eller duplikatvarselet starter sammenslåing; alle bilder, notater, behov og eksemplarer bevares.

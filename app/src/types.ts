@@ -23,6 +23,8 @@ export interface Tool {
   instances: ToolInstance[];
   /** Manuell overstyring av behov; null = automatisk utledet. */
   needOverride: Record<House, number | null>;
+  /** Kjøp utsatt til senere per hus; utelates fra den aktive handlelisten. */
+  postponed: Record<House, boolean>;
   notes: string;
   /** Skjemaversjon for Firestore-dokumentet. */
   v: 4;

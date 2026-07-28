@@ -28,6 +28,7 @@ function sample(partial: Partial<Tool> & Pick<Tool, 'name' | 'category'>): Tool 
     image: '',
     instances: [],
     needOverride: { osterliveien: null, raschsvei: null },
+    postponed: { osterliveien: false, raschsvei: false },
     notes: '',
     v: 4,
     ...partial,
