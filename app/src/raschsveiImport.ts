@@ -184,6 +184,7 @@ export function runRaschsveiImport(tools: Tool[], putTool: (tool: Tool) => void)
       image: '',
       instances,
       needOverride: { osterliveien: null, raschsvei: null },
+      postponed: { osterliveien: false, raschsvei: false },
       notes: item.note ?? '',
       v: 4,
     };

@@ -63,6 +63,10 @@ export function migrateTool(raw: Record<string, unknown>): Tool {
       osterliveien: (raw.needOverride as Record<string, number | null>)?.osterliveien ?? null,
       raschsvei: (raw.needOverride as Record<string, number | null>)?.raschsvei ?? null,
     },
+    postponed: {
+      osterliveien: Boolean((raw.postponed as Record<string, boolean>)?.osterliveien),
+      raschsvei: Boolean((raw.postponed as Record<string, boolean>)?.raschsvei),
+    },
     image: typeof raw.image === 'string' ? raw.image : '',
     v: 4 as const,
   };

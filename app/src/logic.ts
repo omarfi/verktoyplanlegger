@@ -46,6 +46,59 @@ export type HouseFilter = 'begge' | House;
 export type StatusFilter = 'alle' | 'mangler' | 'trenger' | 'har';
 export type ViewIntent = 'alle' | 'handleliste' | 'har';
 
+/** Underfilter for handlelisten: alt, bare kjøp, bare flytt, eller utsatt («kjøp senere»). */
+export type ShoppingFilter = 'alle' | 'kjop' | 'flytt' | 'senere';
+
+/** Er kjøp for dette huset markert som «kjøp senere»? */
+export function isPostponed(tool: Tool, house: House): boolean {
+  return Boolean(tool.postponed?.[house]);
+}
+
+/** Antall som må kjøpes (behov utover det som allerede er på vei via flytting). */
+export function purchaseNeed(tool: Tool, house: House): number {
+  return Math.max(0, effectiveNeed(tool, house) - pendingMoveCount(tool, house));
+}
+
+export interface ShoppingSummary {
+  moves: { house: House; count: number }[];
+  buys: { house: House; count: number }[];
+  laters: { house: House; count: number }[];
+  moveTotal: number;
+  buyTotal: number;
+  laterTotal: number;
+}
+
+/** Oppsummerer hva som må flyttes, kjøpes eller er utsatt, innenfor valgt hus-omfang. */
+export function shoppingSummary(tool: Tool, selectedHouses: House[]): ShoppingSummary {
+  const houses = selectedHouses.length ? selectedHouses : HOUSES;
+  const moves: { house: House; count: number }[] = [];
+  const buys: { house: House; count: number }[] = [];
+  const laters: { house: House; count: number }[] = [];
+  for (const house of houses) {
+    const move = pendingMoveCount(tool, house);
+    if (move > 0) moves.push({ house, count: move });
+    const buy = purchaseNeed(tool, house);
+    if (buy > 0) (isPostponed(tool, house) ? laters : buys).push({ house, count: buy });
+  }
+  const sum = (rows: { count: number }[]) => rows.reduce((total, row) => total + row.count, 0);
+  return { moves, buys, laters, moveTotal: sum(moves), buyTotal: sum(buys), laterTotal: sum(laters) };
+}
+
+/** Skal verktøyet vises for det gitte handleliste-underfilteret? */
+export function matchesShoppingFilter(summary: ShoppingSummary, filter: ShoppingFilter): boolean {
+  switch (filter) {
+    case 'kjop':
+      return summary.buyTotal > 0;
+    case 'flytt':
+      return summary.moveTotal > 0;
+    case 'senere':
+      return summary.laterTotal > 0;
+    default:
+      // «Alle» viser aktive gjøremål, men skjuler det som er utsatt til senere.
+      return summary.buyTotal > 0 || summary.moveTotal > 0;
+  }
+}
+
 export interface Filter {
   house: HouseFilter;
   status: StatusFilter;
@@ -142,7 +195,7 @@ export function shoppingListText(tools: Tool[], selectedHouses: House[]): string
     .map((house) => {
       const rows = tools.flatMap((tool) => {
         const moving = pendingMoveCount(tool, house);
-        const buying = Math.max(0, effectiveNeed(tool, house) - moving);
+        const buying = isPostponed(tool, house) ? 0 : purchaseNeed(tool, house);
         return [
           ...(moving ? [`• Flytt ${tool.name}${moving > 1 ? ` ×${moving}` : ''}`] : []),
           ...(buying ? [`• Kjøp ${tool.name}${buying > 1 ? ` ×${buying}` : ''}`] : []),
