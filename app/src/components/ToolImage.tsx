@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { ensureBackgroundCorrection, getCorrectedImage, getCorrectedImagesVersion, subscribeCorrectedImages } from '../imageBackground';
 
 const ToolIcon = ({ size = 42 }: { size?: number }) => (
   <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -8,10 +9,17 @@ const ToolIcon = ({ size = 42 }: { size?: number }) => (
 
 export function ToolImage({ src, alt = '', className = '' }: { src?: string; alt?: string; className?: string }) {
   const [brokenSrc, setBrokenSrc] = useState('');
+
+  useEffect(() => {
+    if (src) ensureBackgroundCorrection(src);
+  }, [src]);
+  useSyncExternalStore(subscribeCorrectedImages, getCorrectedImagesVersion);
+
   if (!src || brokenSrc === src) {
     return <span className={`tool-image-fallback ${className}`}><ToolIcon /></span>;
   }
-  return <img className={className} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBrokenSrc(src)} />;
+  const displaySrc = getCorrectedImage(src) ?? src;
+  return <img className={className} src={displaySrc} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBrokenSrc(src)} />;
 }
 
 export function ToolGlyph({ size }: { size?: number }) {
