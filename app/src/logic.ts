@@ -46,8 +46,8 @@ export type HouseFilter = 'begge' | House;
 export type StatusFilter = 'alle' | 'mangler' | 'trenger' | 'har';
 export type ViewIntent = 'alle' | 'handleliste' | 'har';
 
-/** Underfilter for handlelisten: alt, bare kjøp, bare flytt, eller utsatt («kjøp senere»). */
-export type ShoppingFilter = 'alle' | 'kjop' | 'flytt' | 'senere';
+/** Underfilter for handlelisten: alt, bare kjøp, eller bare flytt. «Kjøp senere» er en egen seksjon, ikke et filter. */
+export type ShoppingFilter = 'alle' | 'kjop' | 'flytt';
 
 /** Er kjøp for dette huset markert som «kjøp senere»? */
 export function isPostponed(tool: Tool, house: House): boolean {
@@ -91,8 +91,6 @@ export function matchesShoppingFilter(summary: ShoppingSummary, filter: Shopping
       return summary.buyTotal > 0;
     case 'flytt':
       return summary.moveTotal > 0;
-    case 'senere':
-      return summary.laterTotal > 0;
     default:
       // «Alle» viser aktive gjøremål, men skjuler det som er utsatt til senere.
       return summary.buyTotal > 0 || summary.moveTotal > 0;
@@ -209,4 +207,9 @@ export function shoppingListText(tools: Tool[], selectedHouses: House[]): string
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** Best egnede thumbnail: generell bilde, ellers første eksemplar med bilde. */
+export function toolThumbnail(tool: Tool): string {
+  return tool.image.trim() || tool.instances.find((instance) => instance.image.trim())?.image.trim() || '';
 }

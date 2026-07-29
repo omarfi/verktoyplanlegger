@@ -12,11 +12,13 @@ import {
   housePerson,
   matchesIntent,
   matchesShoppingFilter,
+  otherHouse,
   pendingMoveCount,
   purchaseNeed,
   shoppingListText,
   shoppingSummary,
   toolMatchesSearch,
+  toolThumbnail,
   type ShoppingFilter,
   type ViewIntent,
 } from '../logic';
@@ -24,7 +26,14 @@ import type { Tool, House } from '../types';
 import { ToolCard } from '../components/ToolCard';
 import { FilterBar } from '../components/FilterBar';
 import { ShoppingFilterBar } from '../components/ShoppingFilterBar';
-import { ShoppingListTable, type ShoppingGroup } from '../components/ShoppingListTable';
+import {
+  ShoppingBoard,
+  type ShoppingBoardActiveRow,
+  type ShoppingBoardDoneRow,
+  type ShoppingBoardLaterRow,
+  type ShoppingBoardRow,
+  type ShoppingHouseBoardData,
+} from '../components/ShoppingBoard';
 import { EditToolSheet } from '../components/EditToolSheet';
 import { AddToolModal } from '../components/AddToolModal';
 import { MergeDialog } from '../components/MergeDialog';
@@ -43,7 +52,7 @@ function readView(): { intent: ViewIntent; houses: House[]; collapsed: string[];
       intent: ['alle', 'handleliste', 'har'].includes(saved.intent) ? saved.intent : 'alle',
       houses: Array.isArray(saved.houses) ? saved.houses.filter((house: string) => HOUSES.includes(house as House)) : [],
       collapsed: Array.isArray(saved.collapsed) ? saved.collapsed : [],
-      shoppingFilter: ['alle', 'kjop', 'flytt', 'senere'].includes(saved.shoppingFilter) ? saved.shoppingFilter : 'alle',
+      shoppingFilter: ['alle', 'kjop', 'flytt'].includes(saved.shoppingFilter) ? saved.shoppingFilter : 'alle',
     };
   } catch {
     return { intent: 'alle', houses: [], collapsed: [], shoppingFilter: 'alle' };
@@ -59,6 +68,18 @@ interface PendingAcquisition {
   toolId: string;
   fixedHouse: House | null;
   houseOptions: House[];
+}
+
+/** En nylig fullført rad (anskaffet/flyttet) som blir stående som kvittert i handlelisten til den angres. */
+interface CompletionEntry {
+  id: string;
+  toolId: string;
+  house: House;
+  category: string;
+  kind: 'acquired' | 'moved';
+  name: string;
+  image: string;
+  undo: () => void;
 }
 
 export function ToolListScreen() {
@@ -81,6 +102,7 @@ export function ToolListScreen() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [pendingAcquisition, setPendingAcquisition] = useState<PendingAcquisition | null>(null);
   const [pendingMoveToolId, setPendingMoveToolId] = useState<string | null>(null);
+  const [completions, setCompletions] = useState<CompletionEntry[]>([]);
   const noticeTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -114,36 +136,23 @@ export function ToolListScreen() {
     return allCategories.filter((category) => map.has(category)).map((category) => [category, map.get(category)!] as const);
   }, [filtered, allCategories]);
 
-  // Handlelisten som tabell: oppsummer hvert verktøy og del inn i kjøp/flytt/senere.
+  // Toppfilterets teller (Alt/Kjøp/Flytt) summerer på tvers av valgte hus.
   const shoppingSummaries = useMemo(
     () => filtered.map((tool) => ({ tool, summary: shoppingSummary(tool, houses) })),
     [filtered, houses]
   );
 
   const shoppingCounts = useMemo(() => {
-    const counts: Record<ShoppingFilter, number> = { alle: 0, kjop: 0, flytt: 0, senere: 0 };
+    const counts: Record<ShoppingFilter, number> = { alle: 0, kjop: 0, flytt: 0 };
     shoppingSummaries.forEach(({ summary }) => {
-      (['alle', 'kjop', 'flytt', 'senere'] as ShoppingFilter[]).forEach((key) => {
+      (['alle', 'kjop', 'flytt'] as ShoppingFilter[]).forEach((key) => {
         if (matchesShoppingFilter(summary, key)) counts[key] += 1;
       });
     });
     return counts;
   }, [shoppingSummaries]);
 
-  const shoppingGroups = useMemo<ShoppingGroup[]>(() => {
-    const map = new Map<string, ShoppingGroup['rows']>();
-    shoppingSummaries
-      .filter(({ summary }) => matchesShoppingFilter(summary, shoppingFilter))
-      .forEach((row) => map.set(row.tool.category, [...(map.get(row.tool.category) ?? []), row]));
-    return allCategories
-      .filter((category) => map.has(category))
-      .map((category) => ({ category, rows: map.get(category)! }));
-  }, [shoppingSummaries, shoppingFilter, allCategories]);
-
-  const shoppingCount = useMemo(
-    () => shoppingGroups.reduce((total, group) => total + group.rows.length, 0),
-    [shoppingGroups]
-  );
+  const scopeHouses = houses.length ? houses : HOUSES;
 
   const selectedTool = selectedToolId ? tools.find((tool) => tool.id === selectedToolId) ?? null : null;
   const acquisitionTool = pendingAcquisition ? tools.find((tool) => tool.id === pendingAcquisition.toolId) ?? null : null;
@@ -207,6 +216,21 @@ export function ToolListScreen() {
     });
   };
 
+  // Handlelistekortene vet allerede hvilket hus raden gjelder, så det er ingen husvalg å gjøre.
+  const beginAcquisitionFor = (tool: Tool, house: House) => {
+    if (effectiveNeed(tool, house) - pendingMoveCount(tool, house) <= 0) return;
+    setPendingAcquisition({ toolId: tool.id, fixedHouse: house, houseOptions: [house] });
+  };
+
+  const addCompletion = (entry: Omit<CompletionEntry, 'id'>) => {
+    setCompletions((current) => [...current, { ...entry, id: generateId() }]);
+  };
+
+  const undoCompletion = (entry: CompletionEntry) => {
+    entry.undo();
+    setCompletions((current) => current.filter((item) => item.id !== entry.id));
+  };
+
   const markAcquired = (tool: Tool, destination: House, label: string, image: string) => {
     const before = structuredClone(tool);
     const override = tool.needOverride[destination];
@@ -218,7 +242,15 @@ export function ToolListScreen() {
       },
     });
     setPendingAcquisition(null);
-    notify(`${tool.name} er lagt til hos ${houseLabel(destination)}`, () => putTool(before));
+    addCompletion({
+      toolId: tool.id,
+      house: destination,
+      category: tool.category,
+      kind: 'acquired',
+      name: label || tool.name,
+      image: image || toolThumbnail(tool),
+      undo: () => putTool(before),
+    });
   };
 
   const markMoved = (tool: Tool, destination: House) => {
@@ -234,24 +266,27 @@ export function ToolListScreen() {
       },
     });
     setPendingMoveToolId(null);
-    notify(`${instance.label || tool.name} er flyttet til ${houseLabel(destination)}`, () => putTool(before));
+    addCompletion({
+      toolId: tool.id,
+      house: destination,
+      category: tool.category,
+      kind: 'moved',
+      name: instance.label || tool.name,
+      image: instance.image || toolThumbnail(tool),
+      undo: () => putTool(before),
+    });
   };
 
-  const postponeTool = (tool: Tool) => {
-    const scope = houses.length ? houses : HOUSES;
+  const postponeTool = (tool: Tool, house: House) => {
+    if (purchaseNeed(tool, house) <= 0) return;
     const before = structuredClone(tool);
-    const postponed = { ...tool.postponed };
-    scope.forEach((house) => { if (purchaseNeed(tool, house) > 0) postponed[house] = true; });
-    updateTool(tool.id, { postponed });
+    updateTool(tool.id, { postponed: { ...tool.postponed, [house]: true } });
     notify(`${tool.name} er flyttet til «Kjøp senere»`, () => putTool(before));
   };
 
-  const resumeTool = (tool: Tool) => {
-    const scope = houses.length ? houses : HOUSES;
+  const resumeTool = (tool: Tool, house: House) => {
     const before = structuredClone(tool);
-    const postponed = { ...tool.postponed };
-    scope.forEach((house) => { postponed[house] = false; });
-    updateTool(tool.id, { postponed });
+    updateTool(tool.id, { postponed: { ...tool.postponed, [house]: false } });
     notify(`${tool.name} er tilbake i handlelisten`, () => putTool(before));
   };
 
@@ -286,6 +321,112 @@ export function ToolListScreen() {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       notify('Kunne ikke dele handlelisten');
     }
+  };
+
+  // Handlelisten som ett kort per adresse: gruppert på kategori innenfor hvert hus,
+  // med kvitterte rader og «Kjøp senere» stående i listen til de blir angret.
+  const houseBoards: ShoppingHouseBoardData[] = scopeHouses.map((house) => {
+    const rowsByCategory = new Map<string, ShoppingBoardRow[]>();
+    const pushRow = (category: string, row: ShoppingBoardRow) => {
+      rowsByCategory.set(category, [...(rowsByCategory.get(category) ?? []), row]);
+    };
+    const later: ShoppingHouseBoardData['later'] = [];
+    let badgeCount = 0;
+
+    filtered.forEach((tool) => {
+      const summary = shoppingSummary(tool, [house]);
+      const move = summary.moves[0]?.count ?? 0;
+      const buy = summary.buys[0]?.count ?? 0;
+      const laterCount = summary.laters[0]?.count ?? 0;
+      badgeCount += move + buy;
+
+      if (move > 0 && (shoppingFilter === 'alle' || shoppingFilter === 'flytt')) {
+        pushRow(tool.category, {
+          state: 'active',
+          key: `move-${tool.id}`,
+          toolId: tool.id,
+          name: tool.name,
+          image: toolThumbnail(tool),
+          avansert: tool.type === 'avansert',
+          kind: 'move',
+          count: move,
+          fromHouseLabel: houseLabel(otherHouse(house)),
+        });
+      }
+      if (buy > 0 && (shoppingFilter === 'alle' || shoppingFilter === 'kjop')) {
+        pushRow(tool.category, {
+          state: 'active',
+          key: `buy-${tool.id}`,
+          toolId: tool.id,
+          name: tool.name,
+          image: toolThumbnail(tool),
+          avansert: tool.type === 'avansert',
+          kind: 'buy',
+          count: buy,
+        });
+      }
+      if (laterCount > 0) {
+        later.push({
+          key: `later-${tool.id}`,
+          toolId: tool.id,
+          name: tool.name,
+          image: toolThumbnail(tool),
+          sublabel: `Utsatt · ${tool.category}`,
+        });
+      }
+    });
+
+    completions
+      .filter((entry) => entry.house === house)
+      .forEach((entry) => {
+        pushRow(entry.category, {
+          state: 'done',
+          key: entry.id,
+          completionId: entry.id,
+          toolId: entry.toolId,
+          name: entry.name,
+          image: entry.image,
+          kind: entry.kind,
+        });
+      });
+
+    const groups = allCategories
+      .filter((category) => rowsByCategory.has(category))
+      .map((category) => ({ category, rows: rowsByCategory.get(category)! }));
+
+    return { house, badgeCount, groups, later };
+  });
+
+  const hasShoppingContent = houseBoards.some((board) => board.groups.length > 0 || board.later.length > 0);
+
+  const shoppingCount = houseBoards.reduce((total, board) => total + board.groups.reduce(
+    (sum, group) => sum + group.rows.filter((row) => row.state === 'active').length, 0
+  ), 0);
+
+  const handleBoardCheckOffActive = (row: ShoppingBoardActiveRow, house: House) => {
+    const tool = tools.find((item) => item.id === row.toolId);
+    if (!tool) return;
+    void requireWrite(() => row.kind === 'move' ? markMoved(tool, house) : beginAcquisitionFor(tool, house));
+  };
+
+  const handleBoardPostpone = (row: ShoppingBoardActiveRow, house: House) => {
+    const tool = tools.find((item) => item.id === row.toolId);
+    if (tool) void requireWrite(() => postponeTool(tool, house));
+  };
+
+  const handleBoardCheckOffLater = (row: ShoppingBoardLaterRow, house: House) => {
+    const tool = tools.find((item) => item.id === row.toolId);
+    if (tool) void requireWrite(() => beginAcquisitionFor(tool, house));
+  };
+
+  const handleBoardResumeLater = (row: ShoppingBoardLaterRow, house: House) => {
+    const tool = tools.find((item) => item.id === row.toolId);
+    if (tool) void requireWrite(() => resumeTool(tool, house));
+  };
+
+  const handleBoardUndo = (row: ShoppingBoardDoneRow) => {
+    const entry = completions.find((item) => item.id === row.completionId);
+    if (entry) void requireWrite(() => undoCompletion(entry));
   };
 
   return (
@@ -329,17 +470,18 @@ export function ToolListScreen() {
               <aside className="duplicate-banner"><span>◇</span><span><strong>Disse ligner på hverandre</strong>{duplicatePair[0].name} og {duplicatePair[1].name}</span><button onClick={() => void requireWrite(() => { setSelectedIds(new Set(duplicatePair.map((tool) => tool.id))); setSelectMode(true); setShowMerge(true); })}>Slå sammen</button></aside>
             )}
             {intent === 'handleliste' ? (
-              shoppingGroups.length > 0 ? (
-                <ShoppingListTable
-                  groups={shoppingGroups}
-                  onOpen={(tool) => setSelectedToolId(tool.id)}
-                  onAcquired={(tool) => void requireWrite(() => beginAcquisition(tool))}
-                  onMoved={(tool) => void requireWrite(() => beginMoveCompletion(tool))}
-                  onPostpone={(tool) => void requireWrite(() => postponeTool(tool))}
-                  onResume={(tool) => void requireWrite(() => resumeTool(tool))}
+              hasShoppingContent ? (
+                <ShoppingBoard
+                  boards={houseBoards}
+                  onOpenTool={(toolId) => setSelectedToolId(toolId)}
+                  onCheckOffActive={handleBoardCheckOffActive}
+                  onPostpone={handleBoardPostpone}
+                  onCheckOffLater={handleBoardCheckOffLater}
+                  onResumeLater={handleBoardResumeLater}
+                  onUndo={handleBoardUndo}
                 />
               ) : (
-                <section className="empty-state"><div><ToolGlyph /></div><h2>{search ? `Ingen treff på «${search}»` : shoppingFilter === 'senere' ? 'Ingenting er utsatt til senere' : shoppingFilter === 'kjop' ? 'Ingenting å kjøpe akkurat nå' : shoppingFilter === 'flytt' ? 'Ingenting skal flyttes akkurat nå' : `Handlelisten er tom${houses.length === 1 ? ` for ${housePerson(houses[0])}` : ''}`}</h2><p>{search ? 'Prøv et annet navn, eller tøm søket.' : 'Bytt filter for å se resten av gjøremålene.'}</p><button className="secondary-button" onClick={() => { setSearch(''); setShoppingFilter('alle'); }}>Vis hele handlelisten</button></section>
+                <section className="empty-state"><div><ToolGlyph /></div><h2>{search ? `Ingen treff på «${search}»` : shoppingFilter === 'kjop' ? 'Ingenting å kjøpe akkurat nå' : shoppingFilter === 'flytt' ? 'Ingenting skal flyttes akkurat nå' : `Handlelisten er tom${houses.length === 1 ? ` for ${housePerson(houses[0])}` : ''}`}</h2><p>{search ? 'Prøv et annet navn, eller tøm søket.' : 'Bytt filter for å se resten av gjøremålene.'}</p><button className="secondary-button" onClick={() => { setSearch(''); setShoppingFilter('alle'); }}>Vis hele handlelisten</button></section>
               )
             ) : (
             <>

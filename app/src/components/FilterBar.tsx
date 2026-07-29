@@ -17,9 +17,8 @@ const INTENTS: { key: ViewIntent; label: string }[] = [
 ];
 
 export function FilterBar({ intent, houses, onIntentChange, onHousesChange }: FilterBarProps) {
-  const toggleHouse = (house: House) => {
-    onHousesChange(houses.includes(house) ? houses.filter((item) => item !== house) : [...houses, house]);
-  };
+  // «Begge» er lik tomt utvalg (ingen husfilter); ellers er nøyaktig ett hus valgt om gangen.
+  const activeHouse: House | null = houses.length === 1 ? houses[0] : null;
 
   return (
     <div className="filter-row">
@@ -36,22 +35,27 @@ export function FilterBar({ intent, houses, onIntentChange, onHousesChange }: Fi
           </button>
         ))}
       </div>
-      <div className="house-toggles" aria-label="Velg person eller hus">
-        {HOUSES.map((house) => {
-          const active = houses.includes(house);
-          return (
-            <button
-              key={house}
-              className="house-toggle"
-              aria-pressed={active}
-              aria-label={`${active ? 'Fjern' : 'Vis'} ${housePerson(house)}`}
-              onClick={() => toggleHouse(house)}
-            >
-              <HouseBadge house={house} size={32} />
-              <span>{housePerson(house)}</span>
-            </button>
-          );
-        })}
+      <div className="house-segments" role="tablist" aria-label="Velg person eller hus">
+        <button
+          className="house-segment"
+          role="tab"
+          aria-selected={activeHouse === null}
+          onClick={() => onHousesChange([])}
+        >
+          Begge
+        </button>
+        {HOUSES.map((house) => (
+          <button
+            key={house}
+            className="house-segment"
+            role="tab"
+            aria-selected={activeHouse === house}
+            onClick={() => onHousesChange([house])}
+          >
+            <HouseBadge house={house} size={20} />
+            {housePerson(house)}
+          </button>
+        ))}
       </div>
     </div>
   );

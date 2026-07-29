@@ -7,10 +7,9 @@ interface ShoppingFilterBarProps {
 }
 
 const FILTERS: { key: ShoppingFilter; label: string }[] = [
-  { key: 'alle', label: 'Alle' },
+  { key: 'alle', label: 'Alt' },
   { key: 'kjop', label: 'Kjøp' },
   { key: 'flytt', label: 'Flytt' },
-  { key: 'senere', label: 'Kjøp senere' },
 ];
 
 export function ShoppingFilterBar({ value, counts, onChange }: ShoppingFilterBarProps) {
