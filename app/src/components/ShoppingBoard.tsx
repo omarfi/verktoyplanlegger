@@ -97,8 +97,10 @@ function ActiveRow({ row, house, onOpenTool, onCheckOffActive, onPostpone }: {
       <button className="board-check" aria-label="Kvitter ut" onClick={() => onCheckOffActive(row, house)} />
       <span className="board-thumb"><ToolImage src={row.image} alt="" /></span>
       <button className="board-row-body" onClick={() => onOpenTool(row.toolId)}>
-        <span className="board-row-name">{row.name}</span>
-        {row.avansert && <span className="board-row-tag is-advanced">Avansert</span>}
+        <span className="board-row-name-line">
+          <span className="board-row-name">{row.name}</span>
+          {row.avansert && <span className="board-row-tag is-advanced">Avansert</span>}
+        </span>
         {row.kind === 'move' && (
           <span className="board-row-tag is-move"><MoveIcon />Flytt fra {row.fromHouseLabel}</span>
         )}
