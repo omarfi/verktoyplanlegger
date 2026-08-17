@@ -2,6 +2,34 @@ export type House = 'osterliveien' | 'raschsvei';
 
 export type ToolType = 'basis' | 'avansert';
 
+export type PurchaseAvailability = 'in_stock' | 'out_of_stock' | 'unknown';
+
+/** Et butikkprodukt som vurderes for et planlagt innkjøp. */
+export interface PurchaseOption {
+  id: string;
+  url: string;
+  canonicalUrl: string;
+  retailer: string;
+  productName: string;
+  imageUrl: string;
+  /** Pris i øre. null betyr at butikken ikke oppga en lesbar pris. */
+  priceMinor: number | null;
+  currency: 'NOK';
+  availability: PurchaseAvailability;
+  fetchedAt: string;
+}
+
+/** Stabilt øyeblikksbilde av produktet som faktisk ble anskaffet. */
+export interface PurchaseSnapshot {
+  optionId: string;
+  url: string;
+  retailer: string;
+  productName: string;
+  priceMinor: number | null;
+  currency: 'NOK';
+  acquiredAt: string;
+}
+
 /** Ett fysisk eksemplar av et verktøy, med egen lokasjon og thumbnail. */
 export interface ToolInstance {
   id: string;
@@ -10,6 +38,7 @@ export interface ToolInstance {
   label: string;   // valgfritt merke/variant, f.eks. 'Bahco', kan være ''
   /** Planlagt destinasjon. Lokasjonen endres først når flyttingen bekreftes. */
   moveTo?: House | null;
+  purchase?: PurchaseSnapshot;
 }
 
 export interface Tool {
@@ -25,9 +54,12 @@ export interface Tool {
   needOverride: Record<House, number | null>;
   /** Kjøp utsatt til senere per hus; utelates fra den aktive handlelisten. */
   postponed: Record<House, boolean>;
+  /** Delte produktalternativer; endelig valg gjøres separat per hus. */
+  purchaseOptions: PurchaseOption[];
+  selectedPurchaseOption: Record<House, string | null>;
   notes: string;
   /** Skjemaversjon for Firestore-dokumentet. */
-  v: 4;
+  v: 5;
 }
 
 export interface NewToolInput {

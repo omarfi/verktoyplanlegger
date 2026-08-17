@@ -155,7 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isAuthorizedUser(user) || loading || migrationAttempted.current) return;
     migrationAttempted.current = true;
-    runMigration(tools).catch((error) => console.error('Migrering til v4 feilet:', error));
+    runMigration(tools).catch((error) => console.error('Migrering til v5 feilet:', error));
   }, [loading, tools, user]);
 
   const canWrite = () => isAuthorizedUser(auth.currentUser);
@@ -192,8 +192,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : [],
       needOverride: { osterliveien: null, raschsvei: null },
       postponed: { osterliveien: false, raschsvei: false },
+      purchaseOptions: [],
+      selectedPurchaseOption: { osterliveien: null, raschsvei: null },
       notes: input.notes ?? '',
-      v: 4,
+      v: 5,
     };
     setTools((current) => [...current, tool]);
     trackWrite(setDoc(doc(toolsCol, tool.id), tool));
@@ -215,6 +217,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const survivor = selected.find((tool) => tool.id === meta.survivorId);
     if (!survivor || selected.length < 2) return null;
 
+    const purchaseOptions = [...new Map(
+      selected.flatMap((tool) => tool.purchaseOptions).map((option) => [option.canonicalUrl || option.url, option])
+    ).values()];
+    const selectedOption = (house: House) => {
+      const wanted = survivor.selectedPurchaseOption[house]
+        ?? selected.find((tool) => tool.selectedPurchaseOption[house])?.selectedPurchaseOption[house]
+        ?? null;
+      return wanted && purchaseOptions.some((option) => option.id === wanted) ? wanted : null;
+    };
     const merged: Tool = {
       ...survivor,
       name: meta.name,
@@ -236,6 +247,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       postponed: {
         osterliveien: selected.some((tool) => tool.postponed?.osterliveien),
         raschsvei: selected.some((tool) => tool.postponed?.raschsvei),
+      },
+      purchaseOptions,
+      selectedPurchaseOption: {
+        osterliveien: selectedOption('osterliveien'),
+        raschsvei: selectedOption('raschsvei'),
       },
     };
     const removedIds = selected.filter((tool) => tool.id !== survivor.id).map((tool) => tool.id);

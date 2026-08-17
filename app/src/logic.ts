@@ -1,4 +1,4 @@
-import type { Tool, House } from './types';
+import type { Tool, House, PurchaseOption } from './types';
 
 export const HOUSES: House[] = ['osterliveien', 'raschsvei'];
 
@@ -57,6 +57,28 @@ export function isPostponed(tool: Tool, house: House): boolean {
 /** Antall som må kjøpes (behov utover det som allerede er på vei via flytting). */
 export function purchaseNeed(tool: Tool, house: House): number {
   return Math.max(0, effectiveNeed(tool, house) - pendingMoveCount(tool, house));
+}
+
+export function selectedPurchaseOption(tool: Tool, house: House): PurchaseOption | null {
+  const selectedId = tool.selectedPurchaseOption?.[house];
+  return selectedId ? tool.purchaseOptions.find((option) => option.id === selectedId) ?? null : null;
+}
+
+export function purchaseSubtotalMinor(tool: Tool, house: House): number | null {
+  const option = selectedPurchaseOption(tool, house);
+  const count = isPostponed(tool, house) ? 0 : purchaseNeed(tool, house);
+  return count > 0 && option?.priceMinor !== null && option?.priceMinor !== undefined
+    ? option.priceMinor * count
+    : null;
+}
+
+export function formatNok(minor: number): string {
+  return new Intl.NumberFormat('nb-NO', {
+    style: 'currency',
+    currency: 'NOK',
+    minimumFractionDigits: minor % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(minor / 100);
 }
 
 export interface ShoppingSummary {
@@ -191,15 +213,28 @@ export function shoppingListText(tools: Tool[], selectedHouses: House[]): string
   const houses = selectedHouses.length ? selectedHouses : HOUSES;
   const sections = houses
     .map((house) => {
+      let totalMinor = 0;
+      let missingPrices = 0;
       const rows = tools.flatMap((tool) => {
         const moving = pendingMoveCount(tool, house);
         const buying = isPostponed(tool, house) ? 0 : purchaseNeed(tool, house);
+        const option = selectedPurchaseOption(tool, house);
+        const subtotal = buying && option?.priceMinor !== null && option?.priceMinor !== undefined
+          ? option.priceMinor * buying
+          : null;
+        if (subtotal !== null) totalMinor += subtotal;
+        else if (buying) missingPrices += 1;
+        const product = option
+          ? ` — ${option.retailer}${option.priceMinor !== null ? `, ${formatNok(option.priceMinor)}${buying > 1 ? `/stk · ${formatNok(option.priceMinor * buying)}` : ''}` : ''}\n  ${option.url}`
+          : '';
         return [
           ...(moving ? [`• Flytt ${tool.name}${moving > 1 ? ` ×${moving}` : ''}`] : []),
-          ...(buying ? [`• Kjøp ${tool.name}${buying > 1 ? ` ×${buying}` : ''}`] : []),
+          ...(buying ? [`• Kjøp ${tool.name}${buying > 1 ? ` ×${buying}` : ''}${product}`] : []),
         ];
       });
-      return rows.length ? `${houseLabel(house)}:\n${rows.join('\n')}` : '';
+      const total = totalMinor > 0 ? `\nSum valgte varer: ${formatNok(totalMinor)}` : '';
+      const missing = missingPrices > 0 ? `\n${missingPrices} ${missingPrices === 1 ? 'vare mangler' : 'varer mangler'} valgt pris` : '';
+      return rows.length ? `${houseLabel(house)}:\n${rows.join('\n')}${total}${missing}` : '';
     })
     .filter(Boolean);
   return `Handleliste – Verktøyplanlegger\n\n${sections.join('\n\n')}`;

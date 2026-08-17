@@ -10,6 +10,8 @@ interface InstanceDetailsDialogProps {
   fixedHouse?: House | null;
   houseOptions?: House[];
   confirmLabel?: string;
+  initialLabel?: string;
+  initialImage?: string;
   onConfirm: (details: { house: House; label: string; image: string }) => void;
   onCancel: () => void;
 }
@@ -20,12 +22,14 @@ export function InstanceDetailsDialog({
   fixedHouse = null,
   houseOptions = [],
   confirmLabel = 'Legg til i beholdning',
+  initialLabel = '',
+  initialImage = '',
   onConfirm,
   onCancel,
 }: InstanceDetailsDialogProps) {
   const [house, setHouse] = useState<House | null>(fixedHouse);
-  const [label, setLabel] = useState('');
-  const [image, setImage] = useState('');
+  const [label, setLabel] = useState(initialLabel);
+  const [image, setImage] = useState(initialImage);
 
   if (!open) return null;
 

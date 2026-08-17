@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { House } from '../types';
-import { houseLabel, housePerson } from '../logic';
+import type { House, PurchaseOption } from '../types';
+import { formatNok, houseLabel, housePerson } from '../logic';
 import { HouseBadge } from './HouseBadge';
 import { ToolImage } from './ToolImage';
+import { PurchaseCandidatePanel } from './PurchaseCandidatePanel';
 
 const CheckIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -41,6 +42,10 @@ export interface ShoppingBoardActiveRow {
   kind: 'buy' | 'move';
   count: number;
   fromHouseLabel?: string;
+  purchaseOptions: PurchaseOption[];
+  selectedOptionId: string | null;
+  selectedOption: PurchaseOption | null;
+  subtotalMinor: number | null;
 }
 
 export interface ShoppingBoardDoneRow {
@@ -73,6 +78,8 @@ export interface ShoppingHouseBoardData {
   badgeCount: number;
   groups: ShoppingBoardGroup[];
   later: ShoppingBoardLaterRow[];
+  totalMinor: number;
+  missingPriceCount: number;
 }
 
 interface ShoppingBoardProps {
@@ -83,31 +90,55 @@ interface ShoppingBoardProps {
   onCheckOffLater: (row: ShoppingBoardLaterRow, house: House) => void;
   onResumeLater: (row: ShoppingBoardLaterRow, house: House) => void;
   onUndo: (row: ShoppingBoardDoneRow, house: House) => void;
+  onSavePurchaseOption: (row: ShoppingBoardActiveRow, house: House, option: PurchaseOption) => void;
+  onSelectPurchaseOption: (row: ShoppingBoardActiveRow, house: House, optionId: string) => void;
+  onRemovePurchaseOption: (row: ShoppingBoardActiveRow, house: House, optionId: string) => void;
 }
 
-function ActiveRow({ row, house, onOpenTool, onCheckOffActive, onPostpone }: {
+function ActiveRow({ row, house, onOpenTool, onCheckOffActive, onPostpone, onSavePurchaseOption, onSelectPurchaseOption, onRemovePurchaseOption }: {
   row: ShoppingBoardActiveRow;
   house: House;
   onOpenTool: (toolId: string) => void;
   onCheckOffActive: (row: ShoppingBoardActiveRow, house: House) => void;
   onPostpone: (row: ShoppingBoardActiveRow, house: House) => void;
+  onSavePurchaseOption: ShoppingBoardProps['onSavePurchaseOption'];
+  onSelectPurchaseOption: ShoppingBoardProps['onSelectPurchaseOption'];
+  onRemovePurchaseOption: ShoppingBoardProps['onRemovePurchaseOption'];
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <div className="board-row">
-      <button className="board-check" aria-label="Kvitter ut" onClick={() => onCheckOffActive(row, house)} />
-      <span className="board-thumb"><ToolImage src={row.image} alt="" /></span>
-      <button className="board-row-body" onClick={() => onOpenTool(row.toolId)}>
-        <span className="board-row-name-line">
-          <span className="board-row-name">{row.name}</span>
-          {row.avansert && <span className="board-row-tag is-advanced">Avansert</span>}
-        </span>
-        {row.kind === 'move' && (
-          <span className="board-row-tag is-move"><MoveIcon />Flytt fra {row.fromHouseLabel}</span>
-        )}
-      </button>
-      {row.count > 1 && <span className="board-qty">×{row.count}</span>}
-      {row.kind === 'buy' && (
-        <button className="board-postpone" title="Kjøp senere" onClick={() => onPostpone(row, house)}><ClockIcon /></button>
+    <div className={`board-row-wrap${expanded ? ' is-expanded' : ''}`}>
+      <div className="board-row">
+        <button className="board-check" aria-label="Kvitter ut" onClick={() => onCheckOffActive(row, house)} />
+        <span className="board-thumb"><ToolImage src={row.image} alt="" /></span>
+        <button
+          className="board-row-body"
+          aria-expanded={row.kind === 'buy' ? expanded : undefined}
+          onClick={() => row.kind === 'buy' ? setExpanded((value) => !value) : onOpenTool(row.toolId)}
+        >
+          <span className="board-row-name-line">
+            <span className="board-row-name">{row.name}</span>
+            {row.avansert && <span className="board-row-tag is-advanced">Avansert</span>}
+          </span>
+          {row.kind === 'move' && <span className="board-row-tag is-move"><MoveIcon />Flytt fra {row.fromHouseLabel}</span>}
+          {row.kind === 'buy' && row.selectedOption && (
+            <span className="board-row-sub">{row.selectedOption.retailer} · {row.selectedOption.priceMinor === null ? 'pris mangler' : `${formatNok(row.selectedOption.priceMinor)}/stk`}</span>
+          )}
+          {row.kind === 'buy' && !row.selectedOption && <span className="board-row-sub">Velg innkjøpskandidat</span>}
+        </button>
+        {row.count > 1 && <span className="board-qty">×{row.count}</span>}
+        {row.subtotalMinor !== null && <span className="board-row-price">{formatNok(row.subtotalMinor)}</span>}
+        {row.kind === 'buy' && <button className="board-details" title="Åpne verktøydetaljer" aria-label={`Åpne detaljer for ${row.name}`} onClick={() => onOpenTool(row.toolId)}>•••</button>}
+        {row.kind === 'buy' && <button className="board-postpone" title="Kjøp senere" onClick={() => onPostpone(row, house)}><ClockIcon /></button>}
+      </div>
+      {row.kind === 'buy' && expanded && (
+        <PurchaseCandidatePanel
+          options={row.purchaseOptions}
+          selectedId={row.selectedOptionId}
+          onSave={(option) => onSavePurchaseOption(row, house, option)}
+          onSelect={(optionId) => onSelectPurchaseOption(row, house, optionId)}
+          onRemove={(optionId) => onRemovePurchaseOption(row, house, optionId)}
+        />
       )}
     </div>
   );
@@ -152,7 +183,7 @@ function LaterRow({ row, house, onOpenTool, onCheckOffLater, onResumeLater }: {
   );
 }
 
-function HouseCard({ board, onOpenTool, onCheckOffActive, onPostpone, onCheckOffLater, onResumeLater, onUndo }: { board: ShoppingHouseBoardData } & Omit<ShoppingBoardProps, 'boards'>) {
+function HouseCard({ board, onOpenTool, onCheckOffActive, onPostpone, onCheckOffLater, onResumeLater, onUndo, onSavePurchaseOption, onSelectPurchaseOption, onRemovePurchaseOption }: { board: ShoppingHouseBoardData } & Omit<ShoppingBoardProps, 'boards'>) {
   const [laterOpen, setLaterOpen] = useState(false);
 
   return (
@@ -170,7 +201,7 @@ function HouseCard({ board, onOpenTool, onCheckOffActive, onPostpone, onCheckOff
         <div key={group.category}>
           <div className="board-category-label">{group.category}</div>
           {group.rows.map((row) => row.state === 'active'
-            ? <ActiveRow row={row} house={board.house} onOpenTool={onOpenTool} onCheckOffActive={onCheckOffActive} onPostpone={onPostpone} key={row.key} />
+            ? <ActiveRow row={row} house={board.house} onOpenTool={onOpenTool} onCheckOffActive={onCheckOffActive} onPostpone={onPostpone} onSavePurchaseOption={onSavePurchaseOption} onSelectPurchaseOption={onSelectPurchaseOption} onRemovePurchaseOption={onRemovePurchaseOption} key={row.key} />
             : <DoneRow row={row} house={board.house} onOpenTool={onOpenTool} onUndo={onUndo} key={row.key} />)}
         </div>
       ))}
@@ -188,11 +219,17 @@ function HouseCard({ board, onOpenTool, onCheckOffActive, onPostpone, onCheckOff
           ))}
         </div>
       )}
+      {(board.totalMinor > 0 || board.missingPriceCount > 0) && (
+        <footer className="board-total">
+          <span><strong>Sum valgte varer</strong>{board.missingPriceCount > 0 && <small>{board.missingPriceCount} {board.missingPriceCount === 1 ? 'vare mangler' : 'varer mangler'} valgt pris</small>}</span>
+          <b>{formatNok(board.totalMinor)}</b>
+        </footer>
+      )}
     </section>
   );
 }
 
-export function ShoppingBoard({ boards, onOpenTool, onCheckOffActive, onPostpone, onCheckOffLater, onResumeLater, onUndo }: ShoppingBoardProps) {
+export function ShoppingBoard({ boards, onOpenTool, onCheckOffActive, onPostpone, onCheckOffLater, onResumeLater, onUndo, onSavePurchaseOption, onSelectPurchaseOption, onRemovePurchaseOption }: ShoppingBoardProps) {
   return (
     <div className="shopping-board">
       {boards.map((board) => (
@@ -204,6 +241,9 @@ export function ShoppingBoard({ boards, onOpenTool, onCheckOffActive, onPostpone
           onCheckOffLater={onCheckOffLater}
           onResumeLater={onResumeLater}
           onUndo={onUndo}
+          onSavePurchaseOption={onSavePurchaseOption}
+          onSelectPurchaseOption={onSelectPurchaseOption}
+          onRemovePurchaseOption={onRemovePurchaseOption}
           key={board.house}
         />
       ))}

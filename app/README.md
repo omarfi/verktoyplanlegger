@@ -21,7 +21,7 @@ npm run build
 - Verktøylisten og avatarene kan leses uten innlogging.
 - Alle skriveoperasjoner krever Google-innlogging med en av de to godkjente kontoene i `src/store.tsx`.
 - `firestore.rules` håndhever offentlig lesing og e-postbegrenset skriving i backend; reglene deployes med `firebase deploy --only firestore:rules`.
-- Firestore-samlingen `tools` er sannhetskilden for v4-verktøymodellen.
+- Firestore-samlingen `tools` er sannhetskilden for v5-verktøymodellen, inkludert innkjøpskandidater og valgt produkt per hus.
 - `src/migration.ts` normaliserer eldre dokumenter og beskytter mot spøkelseseksemplarer.
 - Firestore bruker vedvarende flerfane-cache.
 - Skjemaer redigerer lokale utkast og skriver først når brukeren lagrer.
@@ -36,4 +36,9 @@ npm run build
 - Hurtigregistrering med eier, bilde, kategoriforslag og duplikatvern.
 - Separat lese- og redigeringsmodus med bilde-URL-forhåndsvisning.
 - Ett-trykks `Anskaffet`/`Flyttet ✓`, delbar handleliste og angre på mutasjoner.
+- Kjøpsrader kan ekspanderes med produktkandidater fra Jula, Biltema, Maxbo og Coop Obs BYGG; valgt kandidat gir stykkpris og totalsum.
 - Langtrykk eller duplikatvarselet starter sammenslåing; alle bilder, notater, behov og eksemplarer bevares.
+
+## Innkjøpskandidater
+
+Kandidater registreres helt i klienten uten Firebase Functions eller andre betalbare backend-tjenester. Brukeren limer inn produkt-URL-en, appen foreslår butikk fra domenet, og navn, pris og valgfritt bilde fylles inn manuelt. Valgt kandidat og summer lagres sammen med verktøyet i Firestore.

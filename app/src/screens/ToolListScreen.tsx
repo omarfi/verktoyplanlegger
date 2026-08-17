@@ -14,7 +14,10 @@ import {
   matchesShoppingFilter,
   otherHouse,
   pendingMoveCount,
+  formatNok,
   purchaseNeed,
+  purchaseSubtotalMinor,
+  selectedPurchaseOption,
   shoppingListText,
   shoppingSummary,
   toolMatchesSearch,
@@ -22,7 +25,7 @@ import {
   type ShoppingFilter,
   type ViewIntent,
 } from '../logic';
-import type { Tool, House } from '../types';
+import type { Tool, House, PurchaseOption } from '../types';
 import { ToolCard } from '../components/ToolCard';
 import { FilterBar } from '../components/FilterBar';
 import { ShoppingFilterBar } from '../components/ShoppingFilterBar';
@@ -234,8 +237,25 @@ export function ToolListScreen() {
   const markAcquired = (tool: Tool, destination: House, label: string, image: string) => {
     const before = structuredClone(tool);
     const override = tool.needOverride[destination];
+    const option = selectedPurchaseOption(tool, destination);
     updateTool(tool.id, {
-      instances: [...tool.instances, { id: generateId(), location: destination, image, label }],
+      instances: [...tool.instances, {
+        id: generateId(),
+        location: destination,
+        image: image || option?.imageUrl || '',
+        label: label || option?.productName || '',
+        ...(option ? {
+          purchase: {
+            optionId: option.id,
+            url: option.url,
+            retailer: option.retailer,
+            productName: option.productName,
+            priceMinor: option.priceMinor,
+            currency: 'NOK' as const,
+            acquiredAt: new Date().toISOString(),
+          },
+        } : {}),
+      }],
       needOverride: {
         ...tool.needOverride,
         [destination]: typeof override === 'number' && override > 0 ? Math.max(0, override - 1) : override,
@@ -247,8 +267,8 @@ export function ToolListScreen() {
       house: destination,
       category: tool.category,
       kind: 'acquired',
-      name: label || tool.name,
-      image: image || toolThumbnail(tool),
+      name: label || option?.productName || tool.name,
+      image: image || option?.imageUrl || toolThumbnail(tool),
       undo: () => putTool(before),
     });
   };
@@ -323,6 +343,40 @@ export function ToolListScreen() {
     }
   };
 
+  const savePurchaseOption = (tool: Tool, house: House, option: PurchaseOption) => {
+    const duplicate = tool.purchaseOptions.find((item) =>
+      item.id !== option.id && (item.canonicalUrl || item.url) === (option.canonicalUrl || option.url)
+    );
+    const saved = duplicate ? { ...option, id: duplicate.id } : option;
+    const purchaseOptions = duplicate
+      ? tool.purchaseOptions.map((item) => item.id === duplicate.id ? saved : item)
+      : tool.purchaseOptions.some((item) => item.id === saved.id)
+        ? tool.purchaseOptions.map((item) => item.id === saved.id ? saved : item)
+        : [...tool.purchaseOptions, saved];
+    updateTool(tool.id, {
+      purchaseOptions,
+      selectedPurchaseOption: tool.selectedPurchaseOption[house]
+        ? tool.selectedPurchaseOption
+        : { ...tool.selectedPurchaseOption, [house]: saved.id },
+    });
+    notify(duplicate ? 'Eksisterende kandidat er oppdatert' : 'Innkjøpskandidaten er lagret');
+  };
+
+  const selectPurchaseOptionFor = (tool: Tool, house: House, optionId: string) => {
+    if (!tool.purchaseOptions.some((option) => option.id === optionId)) return;
+    updateTool(tool.id, { selectedPurchaseOption: { ...tool.selectedPurchaseOption, [house]: optionId } });
+  };
+
+  const removePurchaseOption = (tool: Tool, optionId: string) => {
+    updateTool(tool.id, {
+      purchaseOptions: tool.purchaseOptions.filter((option) => option.id !== optionId),
+      selectedPurchaseOption: {
+        osterliveien: tool.selectedPurchaseOption.osterliveien === optionId ? null : tool.selectedPurchaseOption.osterliveien,
+        raschsvei: tool.selectedPurchaseOption.raschsvei === optionId ? null : tool.selectedPurchaseOption.raschsvei,
+      },
+    });
+  };
+
   // Handlelisten som ett kort per adresse: gruppert på kategori innenfor hvert hus,
   // med kvitterte rader og «Kjøp senere» stående i listen til de blir angret.
   const houseBoards: ShoppingHouseBoardData[] = scopeHouses.map((house) => {
@@ -332,6 +386,8 @@ export function ToolListScreen() {
     };
     const later: ShoppingHouseBoardData['later'] = [];
     let badgeCount = 0;
+    let totalMinor = 0;
+    let missingPriceCount = 0;
 
     filtered.forEach((tool) => {
       const summary = shoppingSummary(tool, [house]);
@@ -351,9 +407,17 @@ export function ToolListScreen() {
           kind: 'move',
           count: move,
           fromHouseLabel: houseLabel(otherHouse(house)),
+          purchaseOptions: [],
+          selectedOptionId: null,
+          selectedOption: null,
+          subtotalMinor: null,
         });
       }
       if (buy > 0 && (shoppingFilter === 'alle' || shoppingFilter === 'kjop')) {
+        const option = selectedPurchaseOption(tool, house);
+        const subtotalMinor = purchaseSubtotalMinor(tool, house);
+        if (subtotalMinor === null) missingPriceCount += 1;
+        else totalMinor += subtotalMinor;
         pushRow(tool.category, {
           state: 'active',
           key: `buy-${tool.id}`,
@@ -363,6 +427,10 @@ export function ToolListScreen() {
           avansert: tool.type === 'avansert',
           kind: 'buy',
           count: buy,
+          purchaseOptions: tool.purchaseOptions,
+          selectedOptionId: tool.selectedPurchaseOption[house],
+          selectedOption: option,
+          subtotalMinor,
         });
       }
       if (laterCount > 0) {
@@ -394,7 +462,7 @@ export function ToolListScreen() {
       .filter((category) => rowsByCategory.has(category))
       .map((category) => ({ category, rows: rowsByCategory.get(category)! }));
 
-    return { house, badgeCount, groups, later };
+    return { house, badgeCount, groups, later, totalMinor, missingPriceCount };
   });
 
   const hasShoppingContent = houseBoards.some((board) => board.groups.length > 0 || board.later.length > 0);
@@ -402,6 +470,8 @@ export function ToolListScreen() {
   const shoppingCount = houseBoards.reduce((total, board) => total + board.groups.reduce(
     (sum, group) => sum + group.rows.filter((row) => row.state === 'active').length, 0
   ), 0);
+  const shoppingTotalMinor = houseBoards.reduce((total, board) => total + board.totalMinor, 0);
+  const shoppingMissingPrices = houseBoards.reduce((total, board) => total + board.missingPriceCount, 0);
 
   const handleBoardCheckOffActive = (row: ShoppingBoardActiveRow, house: House) => {
     const tool = tools.find((item) => item.id === row.toolId);
@@ -427,6 +497,21 @@ export function ToolListScreen() {
   const handleBoardUndo = (row: ShoppingBoardDoneRow) => {
     const entry = completions.find((item) => item.id === row.completionId);
     if (entry) void requireWrite(() => undoCompletion(entry));
+  };
+
+  const handleSavePurchaseOption = (row: ShoppingBoardActiveRow, house: House, option: PurchaseOption) => {
+    const tool = tools.find((item) => item.id === row.toolId);
+    if (tool) void requireWrite(() => savePurchaseOption(tool, house, option));
+  };
+
+  const handleSelectPurchaseOption = (row: ShoppingBoardActiveRow, house: House, optionId: string) => {
+    const tool = tools.find((item) => item.id === row.toolId);
+    if (tool) void requireWrite(() => selectPurchaseOptionFor(tool, house, optionId));
+  };
+
+  const handleRemovePurchaseOption = (row: ShoppingBoardActiveRow, _house: House, optionId: string) => {
+    const tool = tools.find((item) => item.id === row.toolId);
+    if (tool) void requireWrite(() => removePurchaseOption(tool, optionId));
   };
 
   return (
@@ -459,7 +544,7 @@ export function ToolListScreen() {
           </div>
           <FilterBar intent={intent} houses={houses} onIntentChange={setViewIntent} onHousesChange={setHouses} />
           {intent === 'handleliste' && <ShoppingFilterBar value={shoppingFilter} counts={shoppingCounts} onChange={setShoppingFilter} />}
-          <div className="result-meta"><span>{intent === 'handleliste' ? `${shoppingCount} gjøremål` : `${filtered.length} av ${tools.length} verktøy`}</span>{intent === 'handleliste' && shoppingCounts.alle > 0 && <button className="text-button" onClick={shareList}>↥ Del handlelisten</button>}</div>
+          <div className="result-meta"><span>{intent === 'handleliste' ? `${shoppingCount} gjøremål${shoppingTotalMinor > 0 ? ` · ${formatNok(shoppingTotalMinor)}` : ''}${shoppingMissingPrices > 0 ? ` · ${shoppingMissingPrices} uten pris` : ''}` : `${filtered.length} av ${tools.length} verktøy`}</span>{intent === 'handleliste' && shoppingCounts.alle > 0 && <button className="text-button" onClick={shareList}>↥ Del handlelisten</button>}</div>
         </section>
 
         {loading ? (
@@ -479,6 +564,9 @@ export function ToolListScreen() {
                   onCheckOffLater={handleBoardCheckOffLater}
                   onResumeLater={handleBoardResumeLater}
                   onUndo={handleBoardUndo}
+                  onSavePurchaseOption={handleSavePurchaseOption}
+                  onSelectPurchaseOption={handleSelectPurchaseOption}
+                  onRemovePurchaseOption={handleRemovePurchaseOption}
                 />
               ) : (
                 <section className="empty-state"><div><ToolGlyph /></div><h2>{search ? `Ingen treff på «${search}»` : shoppingFilter === 'kjop' ? 'Ingenting å kjøpe akkurat nå' : shoppingFilter === 'flytt' ? 'Ingenting skal flyttes akkurat nå' : `Handlelisten er tom${houses.length === 1 ? ` for ${housePerson(houses[0])}` : ''}`}</h2><p>{search ? 'Prøv et annet navn, eller tøm søket.' : 'Bytt filter for å se resten av gjøremålene.'}</p><button className="secondary-button" onClick={() => { setSearch(''); setShoppingFilter('alle'); }}>Vis hele handlelisten</button></section>
@@ -563,6 +651,8 @@ export function ToolListScreen() {
         fixedHouse={pendingAcquisition.fixedHouse}
         houseOptions={pendingAcquisition.houseOptions}
         confirmLabel="Anskaffet"
+        initialLabel={pendingAcquisition.fixedHouse ? selectedPurchaseOption(acquisitionTool, pendingAcquisition.fixedHouse)?.productName ?? '' : ''}
+        initialImage={pendingAcquisition.fixedHouse ? selectedPurchaseOption(acquisitionTool, pendingAcquisition.fixedHouse)?.imageUrl ?? '' : ''}
         onConfirm={({ house, label, image }) => markAcquired(acquisitionTool, house, label, image)}
         onCancel={() => setPendingAcquisition(null)}
       />}

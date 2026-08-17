@@ -1,9 +1,9 @@
 import { collection, doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Tool, ToolInstance, House } from './types';
+import type { Tool, ToolInstance, House, PurchaseOption, PurchaseSnapshot } from './types';
 import { generateId } from './logic';
 
-const MIGRATION_VERSION = 4;
+const MIGRATION_VERSION = 5;
 const migrationDoc = doc(db, 'meta', 'migration');
 
 interface LegacyInventoryItem {
@@ -36,7 +36,42 @@ function normalizeInstances(arr: unknown[]): ToolInstance[] {
       (i.moveTo === 'osterliveien' || i.moveTo === 'raschsvei') && i.moveTo !== i.location
         ? i.moveTo
         : null,
+    ...(i.purchase ? { purchase: normalizePurchaseSnapshot(i.purchase) } : {}),
   }));
+}
+
+function normalizePurchaseSnapshot(raw: Partial<PurchaseSnapshot>): PurchaseSnapshot {
+  return {
+    optionId: String(raw.optionId ?? ''),
+    url: String(raw.url ?? ''),
+    retailer: String(raw.retailer ?? ''),
+    productName: String(raw.productName ?? ''),
+    priceMinor: typeof raw.priceMinor === 'number' && Number.isFinite(raw.priceMinor) ? Math.max(0, Math.round(raw.priceMinor)) : null,
+    currency: 'NOK',
+    acquiredAt: String(raw.acquiredAt ?? new Date().toISOString()),
+  };
+}
+
+function normalizePurchaseOptions(raw: unknown): PurchaseOption[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const option = item as Partial<PurchaseOption>;
+    const url = String(option.url ?? '').trim();
+    if (!url) return [];
+    return [{
+      id: String(option.id ?? generateId()),
+      url,
+      canonicalUrl: String(option.canonicalUrl ?? url),
+      retailer: String(option.retailer ?? 'Ukjent butikk'),
+      productName: String(option.productName ?? ''),
+      imageUrl: String(option.imageUrl ?? ''),
+      priceMinor: typeof option.priceMinor === 'number' && Number.isFinite(option.priceMinor) ? Math.max(0, Math.round(option.priceMinor)) : null,
+      currency: 'NOK' as const,
+      availability: option.availability === 'in_stock' || option.availability === 'out_of_stock' ? option.availability : 'unknown',
+      fetchedAt: String(option.fetchedAt ?? new Date().toISOString()),
+    }];
+  });
 }
 
 function normalizeType(raw: unknown): Tool['type'] {
@@ -44,8 +79,8 @@ function normalizeType(raw: unknown): Tool['type'] {
 }
 
 /**
- * Mapper et Firestore-dokument (v1, v2, v3 eller v4) til v4-modellen.
- * Brukes både i onSnapshot (så UI-et alltid ser v4-formen) og i den
+ * Mapper et Firestore-dokument (v1-v5) til v5-modellen.
+ * Brukes både i onSnapshot (så UI-et alltid ser v5-formen) og i den
  * engangs skrivemigreringen.
  *
  * Viktig: et bilde betyr IKKE at man disponerer et eksemplar. Eksemplarer
@@ -53,6 +88,12 @@ function normalizeType(raw: unknown): Tool['type'] {
  * generell thumbnail på verktøyet.
  */
 export function migrateTool(raw: Record<string, unknown>): Tool {
+  const purchaseOptions = normalizePurchaseOptions(raw.purchaseOptions);
+  const selected = raw.selectedPurchaseOption as Record<string, unknown> | undefined;
+  const selectedFor = (house: House): string | null => {
+    const id = typeof selected?.[house] === 'string' ? String(selected[house]) : null;
+    return id && purchaseOptions.some((option) => option.id === id) ? id : null;
+  };
   const base = {
     id: String(raw.id ?? ''),
     name: String(raw.name ?? ''),
@@ -68,11 +109,16 @@ export function migrateTool(raw: Record<string, unknown>): Tool {
       raschsvei: Boolean((raw.postponed as Record<string, boolean>)?.raschsvei),
     },
     image: typeof raw.image === 'string' ? raw.image : '',
-    v: 4 as const,
+    purchaseOptions,
+    selectedPurchaseOption: {
+      osterliveien: selectedFor('osterliveien'),
+      raschsvei: selectedFor('raschsvei'),
+    },
+    v: 5 as const,
   };
 
-  // v4: normaliser, behold alt.
-  if (raw.v === 4 && Array.isArray(raw.instances)) {
+  // v4/v5: normaliser, behold alt. v4 får tom innkjøpsplan.
+  if ((raw.v === 4 || raw.v === 5) && Array.isArray(raw.instances)) {
     return { ...base, instances: normalizeInstances(raw.instances) };
   }
 
@@ -118,7 +164,7 @@ export function migrateTool(raw: Record<string, unknown>): Tool {
 }
 
 /**
- * Engangs skrivemigrering til v4 (styrt av meta/migration-dokumentet):
+ * Engangs skrivemigrering til v5 (styrt av meta/migration-dokumentet):
  * skriver alle verktøy om til den nye formen og rydder bort kits og
  * gamle meta-dokumenter. Idempotent uansett hvilken versjon prod har.
  */

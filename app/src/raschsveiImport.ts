@@ -185,8 +185,10 @@ export function runRaschsveiImport(tools: Tool[], putTool: (tool: Tool) => void)
       instances,
       needOverride: { osterliveien: null, raschsvei: null },
       postponed: { osterliveien: false, raschsvei: false },
+      purchaseOptions: [],
+      selectedPurchaseOption: { osterliveien: null, raschsvei: null },
       notes: item.note ?? '',
-      v: 4,
+      v: 5,
     };
     commit(tool);
     created += 1;

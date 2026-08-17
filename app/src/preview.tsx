@@ -29,8 +29,10 @@ function sample(partial: Partial<Tool> & Pick<Tool, 'name' | 'category'>): Tool 
     instances: [],
     needOverride: { osterliveien: null, raschsvei: null },
     postponed: { osterliveien: false, raschsvei: false },
+    purchaseOptions: [],
+    selectedPurchaseOption: { osterliveien: null, raschsvei: null },
     notes: '',
-    v: 4,
+    v: 5,
     ...partial,
   };
 }
@@ -90,6 +92,7 @@ function PreviewAppProvider({ children }: { children: ReactNode }) {
         image: selected.find((tool) => tool.image)?.image ?? '',
         notes: [...new Set(selected.map((tool) => tool.notes).filter(Boolean))].join('\n\n'),
         instances: selected.flatMap((tool) => tool.instances),
+        purchaseOptions: [...new Map(selected.flatMap((tool) => tool.purchaseOptions).map((option) => [option.canonicalUrl || option.url, option])).values()],
       };
       const removed = new Set(selected.filter((tool) => tool.id !== survivor.id).map((tool) => tool.id));
       setTools((current) => current.map((tool) => tool.id === merged.id ? merged : tool).filter((tool) => !removed.has(tool.id)));
