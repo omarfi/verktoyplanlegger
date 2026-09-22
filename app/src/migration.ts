@@ -52,6 +52,10 @@ function normalizePurchaseSnapshot(raw: Partial<PurchaseSnapshot>): PurchaseSnap
   };
 }
 
+function normalizePurchaseQualityTier(raw: unknown): PurchaseOption['qualityTier'] {
+  return raw === 'budget' || raw === 'standard' || raw === 'premium' ? raw : null;
+}
+
 function normalizePurchaseOptions(raw: unknown): PurchaseOption[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((item) => {
@@ -69,6 +73,7 @@ function normalizePurchaseOptions(raw: unknown): PurchaseOption[] {
       priceMinor: typeof option.priceMinor === 'number' && Number.isFinite(option.priceMinor) ? Math.max(0, Math.round(option.priceMinor)) : null,
       currency: 'NOK' as const,
       availability: option.availability === 'in_stock' || option.availability === 'out_of_stock' ? option.availability : 'unknown',
+      qualityTier: normalizePurchaseQualityTier(option.qualityTier),
       fetchedAt: String(option.fetchedAt ?? new Date().toISOString()),
     }];
   });

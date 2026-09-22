@@ -4,6 +4,8 @@ export type ToolType = 'basis' | 'avansert';
 
 export type PurchaseAvailability = 'in_stock' | 'out_of_stock' | 'unknown';
 
+export type PurchaseQualityTier = 'budget' | 'standard' | 'premium';
+
 /** Et butikkprodukt som vurderes for et planlagt innkjøp. */
 export interface PurchaseOption {
   id: string;
@@ -16,6 +18,8 @@ export interface PurchaseOption {
   priceMinor: number | null;
   currency: 'NOK';
   availability: PurchaseAvailability;
+  /** Manuell kvalitetskategori som gjør innkjøpskandidater enklere å sammenligne. */
+  qualityTier: PurchaseQualityTier | null;
   fetchedAt: string;
 }
 
