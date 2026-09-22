@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { PurchaseOption } from '../types';
+import type { PurchaseOption, PurchaseQualityTier } from '../types';
 import { formatNok, generateId } from '../logic';
 import { ToolImage } from './ToolImage';
 
@@ -20,7 +20,20 @@ interface Draft {
   imageUrl: string;
   priceText: string;
   availability: PurchaseOption['availability'];
+  qualityTier: PurchaseOption['qualityTier'];
 }
+
+const QUALITY_TIERS: { value: PurchaseQualityTier; label: string }[] = [
+  { value: 'budget', label: 'Budsjett' },
+  { value: 'standard', label: 'Standard' },
+  { value: 'premium', label: 'Premium' },
+];
+
+const QUALITY_LABELS: Record<PurchaseQualityTier, string> = {
+  budget: 'Budsjett',
+  standard: 'Standard',
+  premium: 'Premium',
+};
 
 const RETAILERS: [string, string][] = [
   ['jula.no', 'Jula'],
@@ -51,6 +64,7 @@ function draftFromOption(option: PurchaseOption): Draft {
     imageUrl: option.imageUrl,
     priceText: option.priceMinor === null ? '' : String(option.priceMinor / 100).replace('.', ','),
     availability: option.availability,
+    qualityTier: option.qualityTier,
   };
 }
 
@@ -79,6 +93,7 @@ export function PurchaseCandidatePanel({ options, selectedId, onSave, onSelect, 
       imageUrl: '',
       priceText: '',
       availability: 'unknown',
+      qualityTier: 'standard',
     });
   };
 
@@ -103,6 +118,7 @@ export function PurchaseCandidatePanel({ options, selectedId, onSave, onSelect, 
       priceMinor: priceMinor(draft.priceText),
       currency: 'NOK',
       availability: draft.availability,
+      qualityTier: draft.qualityTier,
       fetchedAt: new Date().toISOString(),
     });
     setDraft(null);
@@ -119,7 +135,11 @@ export function PurchaseCandidatePanel({ options, selectedId, onSave, onSelect, 
             <article className={`purchase-option${selected ? ' is-selected' : ''}`} key={option.id}>
               <span className="purchase-option-image"><ToolImage src={option.imageUrl} alt="" /></span>
               <div className="purchase-option-copy">
-                <div><strong>{option.productName}</strong>{selected && <span className="purchase-selected-tag">Valgt</span>}</div>
+                <div>
+                  <strong>{option.productName}</strong>
+                  {selected && <span className="purchase-selected-tag">Valgt</span>}
+                  {option.qualityTier && <span className={`purchase-quality-tag is-${option.qualityTier}`}>{QUALITY_LABELS[option.qualityTier]}</span>}
+                </div>
                 <small>{option.retailer} · {option.priceMinor === null ? 'Pris mangler' : formatNok(option.priceMinor)}</small>
                 <small>Registrert {new Date(option.fetchedAt).toLocaleDateString('nb-NO')}</small>
               </div>
@@ -154,6 +174,22 @@ export function PurchaseCandidatePanel({ options, selectedId, onSave, onSelect, 
           <div className="two-fields">
             <label>Pris i kroner<input className="form-input" inputMode="decimal" value={draft.priceText} onChange={(event) => setDraft({ ...draft, priceText: event.target.value })} placeholder="999,00" /></label>
             <label>Bilde-URL <small>(valgfritt)</small><input className="form-input" type="url" value={draft.imageUrl} onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })} /></label>
+          </div>
+          <div className="purchase-quality-field">
+            <span>Kvalitetsnivå</span>
+            <div className="purchase-quality-options" role="group" aria-label="Kvalitetsnivå">
+              {QUALITY_TIERS.map((tier) => (
+                <button
+                  type="button"
+                  className={`purchase-quality-option is-${tier.value}`}
+                  aria-pressed={draft.qualityTier === tier.value}
+                  onClick={() => setDraft({ ...draft, qualityTier: tier.value })}
+                  key={tier.value}
+                >
+                  {tier.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="purchase-preview-actions"><button className="secondary-button" onClick={() => setDraft(null)}>Avbryt</button><button className="primary-button" onClick={saveDraft}>Lagre kandidat</button></div>
         </div>
